@@ -8,6 +8,7 @@ import java.awt.*;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.*;
 
 public class CsvReader extends JFrame {
     private JTable table;
@@ -266,7 +267,7 @@ public class CsvReader extends JFrame {
 
         @Override
         protected Void doInBackground() {
-            readCsvFile(file);
+            readCsvFileParallel(file);
             return null;
         }
 
@@ -276,59 +277,84 @@ public class CsvReader extends JFrame {
         }
     }
 
-
-    private void readCsvFile(File file) {
+    private void readCsvFileParallel(File file) {
+        tableModel.setRowCount(0);
+        boolean hasHeader = headerYes.isSelected();
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
             String line;
-            List<String[]> data = new ArrayList<>();
-            boolean hasHeader = headerYes.isSelected();
-
-            // Lendo primeira linha (cabeçalho ou primeira linha de dados)
-            if ((line = br.readLine()) != null) {
-                String[] header = line.split(",");
-                if (hasHeader) {
-                    String[] newHeader = new String[header.length + 1];
-                    newHeader[0] = "ID";
-                    System.arraycopy(header, 0, newHeader, 1, header.length);
+            String[] header = br.readLine().split(",");
+            if (hasHeader) {
+                String[] newHeader = new String[header.length + 1];
+                newHeader[0] = "ID";
+                System.arraycopy(header, 0, newHeader, 1, header.length);
+                SwingUtilities.invokeLater(() -> {
                     tableModel.setColumnIdentifiers(newHeader);
                     generateInputFields(header.length);
-                    SwingUtilities.invokeLater(() -> table.removeColumn(table.getColumnModel().getColumn(0)));
-
-
-                } else {
-                    String[] newHeader = new String[header.length + 1];
-                    newHeader[0] = "ID";
-                    for (int i = 1; i < newHeader.length; i++) {
-                        newHeader[i] = "Column" + i;
-                    }
-                    tableModel.setColumnIdentifiers(newHeader);
-                    String[] newRow = new String[header.length + 1];
-                    newRow[0] = "1";
-                    System.arraycopy(header, 0, newRow, 1, header.length);
-                    data.add(newRow);
-                    System.out.println(header.length);
-                    System.out.println(header.length+1);
-                    generateInputFields(header.length);
-
-                    SwingUtilities.invokeLater(() -> table.removeColumn(table.getColumnModel().getColumn(0)));
-                }
+                    table.removeColumn(table.getColumnModel().getColumn(0));
+                });
+            } else {
+                // Fecha o BufferedReader e reabre para ler o arquivo desde o começo
+                readCsvFileNoHeader(file, header.length);
+                return;
             }
-            // Lendo os dados
-            int id = hasHeader ? 1 : 2;
+            List<String[]> allRows = new ArrayList<>();
             while ((line = br.readLine()) != null) {
-                String[] row = line.split(",");
-                String[] newRow = new String[row.length + 1];
-                newRow[0] = String.valueOf(id++);
-                System.arraycopy(row, 0, newRow, 1, row.length);
-                data.add(newRow);
+                allRows.add(line.split(","));
             }
-            // Adicionando os dados à tabela
-            tableModel.setRowCount(0);
-            for (String[] rowData : data) {
-                tableModel.addRow(rowData);
+            processCsvChunks(allRows);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao ler o arquivo CSV!", "Erro", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace(); // útil para depuração
+        }
+    }
+    private void readCsvFileNoHeader(File file, int columnCount) {
+        try (BufferedReader br = new BufferedReader(new FileReader(file))) {
+            List<String[]> allRows = new ArrayList<>();
+            String line;
+            while ((line = br.readLine()) != null) {
+                allRows.add(line.split(","));
             }
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao ler o arquivo!", "Erro", JOptionPane.ERROR_MESSAGE);
+            // Gerar cabeçalhos genéricos
+            String[] newHeader = new String[columnCount + 1];
+            newHeader[0] = "ID";
+            for (int i = 1; i < newHeader.length; i++) {
+                newHeader[i] = "Column" + i;
+            }
+            SwingUtilities.invokeLater(() -> tableModel.setColumnIdentifiers(newHeader));
+            processCsvChunks(allRows);
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao ler o arquivo CSV (sem cabeçalho)!", "Erro", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+        }
+    }
+    private void processCsvChunks(List<String[]> allRows) throws InterruptedException, ExecutionException {
+        ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+        List<Future<List<Object[]>>> futures = new ArrayList<>();
+        int chunkSize = 1000;
+        for (int i = 0; i < allRows.size(); i += chunkSize) {
+            final int start = i;
+            final int end = Math.min(i + chunkSize, allRows.size());
+            futures.add(executor.submit(() -> {
+                List<Object[]> rows = new ArrayList<>();
+                for (int j = start; j < end; j++) {
+                    String[] lineData = allRows.get(j);
+                    Object[] row = new Object[lineData.length + 1];
+                    row[0] = j + 1;
+                    System.arraycopy(lineData, 0, row, 1, lineData.length);
+                    rows.add(row);
+                }
+                return rows;
+            }));
+        }
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.MINUTES);
+        for (Future<List<Object[]>> future : futures) {
+            List<Object[]> chunk = future.get();
+            SwingUtilities.invokeLater(() -> {
+                for (Object[] row : chunk) {
+                    tableModel.addRow(row);
+                }
+            });
         }
     }
 
