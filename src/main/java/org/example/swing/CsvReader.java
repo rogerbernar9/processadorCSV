@@ -2,184 +2,40 @@ package org.example.swing;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
-import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.io.*;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 
 public class CsvReader extends JFrame {
-    private JTable table;
-    private DefaultTableModel tableModel;
-    private JDialog loadingDialog;
+    private final DefaultTableModel tableModel = new DefaultTableModel();
+    private final JTable table = new JTable(tableModel);
+    private final JCheckBox headerYes = new JCheckBox("Header", true);
+    private final ExecutorService executor = Executors.newFixedThreadPool(2);
+    private final BlockingQueue<List<String>> csvQueue = new LinkedBlockingQueue<>();
+    private final AtomicInteger totalRows = new AtomicInteger(0);
+    private final AtomicInteger insertedRows = new AtomicInteger(0);
+    private final int batchSize = 500;
+    private final AtomicBoolean leituraFinalizada = new AtomicBoolean(false);
     private File currentFile;
-    private JRadioButton headerYes;
-    private JRadioButton headerNo;
-    private JTextField searchField;
-    private TableRowSorter<DefaultTableModel> rowSorter;
-    private JPanel inputPanel;
-    private List<JTextField> inputFields;
-    private JButton btnAdd;
-    private JLabel progressLabel;
-    private AtomicInteger linesProcessed = new AtomicInteger(0);
-
-    private int currentPage = 1;
-    private int rowsPerPage = 100; // Quantas linhas por página
-    private List<Object[]> fullData = new ArrayList<>(); // Armazena todos os dados para paginação
-    private JPanel paginationPanel;
-    private JButton btnAnterior;
-    private JButton btnProxima;
-    private JLabel lblPagina;
-    private static final List<String[]> POISON_PILL = Collections.emptyList();
-
-    private List<Object[]> dadosLidos = Collections.synchronizedList(new ArrayList<>());
-
     private String[] headers;
-
-    private String insertSql = "";
-
-    private Connection conexaoCompartilhada;
-    private ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
-    private BlockingQueue<List<String>> csvQueue = new LinkedBlockingQueue<>();
-    private AtomicInteger totalRows = new AtomicInteger(0);
-    private AtomicInteger insertedRows = new AtomicInteger(0);
-
+    private String insertSql;
+    private final int rowsPerPage = 1000;
 
     public CsvReader() {
-        setTitle("Leitor de CSV - Java Swing");
-        setSize(950, 620);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null);
-
-        tableModel = new DefaultTableModel();
-        table = new JTable(tableModel);
-
-        rowSorter = new TableRowSorter<>(tableModel);
-        table.setRowSorter(rowSorter);
-
-        JScrollPane scrollPane = new JScrollPane(table);
-
-        JButton btnLoad = new JButton("Carregar CSV");
-        btnLoad.addActionListener(e -> loadCsv());
-
-        searchField = new JTextField(20);
-
-        JButton btnSave = new JButton("Salvar CSV");
-        btnSave.addActionListener(e -> saveCsv());
-
-        JButton btnFiltrar = new JButton("Filtrar");
-
-        JButton btnLimpar = new JButton("Limpar");
-
-        JButton btnExportSql = new JButton("Exportar como SQL");
-
-        JButton btnAddColumn = new JButton("Adicionar Coluna");
-
-        JButton btnEditCell = new JButton("Editar Célula");
-
-
-        JPanel panel = new JPanel();
-        panel.add(btnLoad);
-        panel.add(btnSave);
-        panel.add(new JLabel("Pesquisar: "));
-        panel.add(searchField);
-        panel.add(btnFiltrar);
-        panel.add(btnLimpar);
-        panel.add(btnExportSql);
-        panel.add(btnAddColumn);
-        panel.add(btnEditCell);
-
-//        btnFiltrar.addActionListener(e -> filterTable());
-
-        btnLimpar.addActionListener(e -> limparTable());
-
-        btnExportSql.addActionListener(e -> exportAsSql());
-
-        btnEditCell.addActionListener(e -> editSelectedCell());
-
-
-        // Painel para opções de cabeçalho
-        JPanel headerPanel = new JPanel();
-        headerPanel.setLayout(new FlowLayout());
-
-        JLabel headerLabel = new JLabel("Primeira linha é cabeçalho?");
-        headerYes = new JRadioButton("Sim");
-        headerNo = new JRadioButton("Não");
-        ButtonGroup headerGroup = new ButtonGroup();
-        headerGroup.add(headerYes);
-        headerGroup.add(headerNo);
-        headerNo.setSelected(true);
-
-        headerPanel.add(headerLabel);
-        headerPanel.add(headerYes);
-        headerPanel.add(headerNo);
-
-        // Layout da tela
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BorderLayout());
-        topPanel.add(panel, BorderLayout.NORTH);
-        topPanel.add(headerPanel, BorderLayout.CENTER);
-
-        add(scrollPane, BorderLayout.CENTER);
-        inputPanel = new JPanel();
-        btnAdd = new JButton("Adicionar Registro");
-        btnAdd.addActionListener(e -> addRecord());
-        btnAddColumn.addActionListener(e -> addNewColumnAndSave());
-
-        inputPanel.add(btnAdd);
-        add(topPanel, BorderLayout.NORTH);
-        add(inputPanel, BorderLayout.SOUTH);
-
-//        paginacao
-        paginationPanel = new JPanel();
-        btnAnterior = new JButton("Anterior");
-        btnProxima = new JButton("Próxima");
-        lblPagina = new JLabel("Página: 1");
-        btnProxima.addActionListener(e -> {
-            currentPage++;
-            updateTablePage();
-
-        });
-        btnAnterior.addActionListener(e -> {
-            if (currentPage > 1) {
-                currentPage--;
-                updateTablePage();
-            }
-        });
-        paginationPanel.add(btnAnterior);
-        paginationPanel.add(lblPagina);
-        paginationPanel.add(btnProxima);
-        add(paginationPanel, BorderLayout.AFTER_LAST_LINE);
-
-    }
-
-
-    private void updateTablePage() {
-        displayDataFromSqlite(currentPage);
-        lblPagina.setText("Página: " + currentPage);
-    }
-
-    private void updateTableData() {
-        int start = (currentPage - 1) * rowsPerPage;
-        int end = Math.min(start + rowsPerPage, fullData.size());
-        SwingUtilities.invokeLater(() -> {
-            tableModel.setRowCount(0);
-            for (int i = start; i < end; i++) {
-                tableModel.addRow(fullData.get(i));
-            }
-            lblPagina.setText("Página: " + currentPage);
-        });
-    }
-    private void limparTable() {
-        searchField.setText("");
-        rowSorter.setRowFilter(null);
+        setTitle("CSV Processor");
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setSize(800, 600);
+        setLayout(new BorderLayout());
+        JButton loadButton = new JButton("Carregar CSV");
+        loadButton.addActionListener(e -> loadCsv());
+        add(loadButton, BorderLayout.NORTH);
+        add(new JScrollPane(table), BorderLayout.CENTER);
+        add(headerYes, BorderLayout.SOUTH);
     }
 
     private void loadCsv() {
@@ -189,25 +45,12 @@ public class CsvReader extends JFrame {
             currentFile = fileChooser.getSelectedFile();
             createSqliteDatabase(currentFile);
             loadDataIntoSqlite(currentFile);
-            executor.execute(() -> {
-                try {
-                    // Aguardar o processamento terminar (csvQueue ficar vazio e sinal de fim)
-                    while (csvQueue.peek() != null) {
-                        Thread.sleep(100);
-                    }
-                    SwingUtilities.invokeLater(() -> displayDataFromSqlite(1));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    e.printStackTrace();
-                }
-            });
         }
     }
+
     private void createSqliteDatabase(File csvFile) {
-        try {
-            Class.forName("org.sqlite.JDBC");
-            conexaoCompartilhada = DriverManager.getConnection("jdbc:sqlite:data.db");
-            Statement stmt = conexaoCompartilhada.createStatement();
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db")) {
+            Statement stmt = conn.createStatement();
             stmt.executeUpdate("DROP TABLE IF EXISTS csv_data");
 
             String createTableSql = "CREATE TABLE csv_data (id INTEGER PRIMARY KEY AUTOINCREMENT, ";
@@ -218,174 +61,99 @@ public class CsvReader extends JFrame {
                     String[] columns = firstLine.split(",");
                     headers = new String[columns.length];
 
-                    if (headerYes.isSelected()) {
-                        for (int i = 0; i < columns.length; i++) {
-                            String clean = columns[i].replaceAll("[^a-zA-Z0-9_]", "");
-                            if (clean.matches("^\\d+$")) {
-                                clean = "col_" + clean;
-                            }
-                            headers[i] = clean;
-                            createTableSql += "`" + clean + "` TEXT";
-                            if (i < columns.length - 1) {
-                                createTableSql += ", ";
-                            }
+                    for (int i = 0; i < columns.length; i++) {
+                        String clean = columns[i].replaceAll("[^a-zA-Z0-9_]", "");
+                        if (clean.matches("^\\d+$")) {
+                            clean = "col_" + clean;
                         }
-                    } else {
-                        for (int i = 0; i < columns.length; i++) {
-                            String columnName = JOptionPane.showInputDialog(
-                                    this,
-                                    "Digite o nome para a Coluna " + (i + 1) + ":",
-                                    "Nomes das Colunas",
-                                    JOptionPane.PLAIN_MESSAGE
-                            );
-                            if (columnName == null || columnName.trim().isEmpty()) {
-                                columnName = "column" + (i + 1);
-                            } else {
-                                columnName = columnName.replaceAll("[^a-zA-Z0-9_]", "");
-                            }
-                            headers[i] = columnName;
-                            createTableSql += "`" + columnName + "` TEXT";
-                            if (i < columns.length - 1) {
-                                createTableSql += ", ";
-                            }
+                        headers[i] = clean;
+                        createTableSql += "`" + clean + "` TEXT";
+                        if (i < columns.length - 1) {
+                            createTableSql += ", ";
                         }
-                        SwingUtilities.invokeLater(() -> tableModel.setColumnIdentifiers(headers));
                     }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
             }
 
             createTableSql += ")";
             stmt.executeUpdate(createTableSql);
-            stmt.close();
 
+            insertSql = "INSERT INTO csv_data (" +
+                    String.join(", ", Arrays.stream(headers).map(h -> "`" + h + "`").toList()) + ") VALUES (" +
+                    String.join(", ", Collections.nCopies(headers.length, "?")) + ")";
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Erro ao criar o banco de dados SQLite.", "Erro", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Erro ao criar banco de dados.", "Erro", JOptionPane.ERROR_MESSAGE);
         }
     }
+
     private void loadDataIntoSqlite(File csvFile) {
         boolean hasHeader = headerYes.isSelected();
+        leituraFinalizada.set(false);
+
+
         executor.execute(() -> {
-            try {
-                processCsvLines();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+            try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+                String line = br.readLine();
+                if (!hasHeader && line != null) {
+                    csvQueue.put(List.of(line));
+                    totalRows.incrementAndGet();
+                }
+                List<String> batch = new ArrayList<>();
+                while ((line = br.readLine()) != null) {
+                    batch.add(line);
+                    totalRows.incrementAndGet();
+                    if (batch.size() >= batchSize) {
+                        csvQueue.put(new ArrayList<>(batch));
+                        batch.clear();
+                    }
+                }
+                if (!batch.isEmpty()) {
+                    csvQueue.put(batch);
+                }
+            } catch (Exception e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Erro ao processar dados CSV.", "Erro", JOptionPane.ERROR_MESSAGE);
+            } finally {
+                leituraFinalizada.set(true);
             }
         });
 
-        BufferedReader br = null;
-        try {
-            br = new BufferedReader(new FileReader(csvFile));
-            String firstLine = br.readLine();
-            String[] headerFields = firstLine.split(",");
 
-            if (!hasHeader) {
-                // Fecha e reabre o reader para começar do início
-                br.close();
-                br = new BufferedReader(new FileReader(csvFile));
-            }
-
-            // Usar os nomes de coluna já salvos anteriormente
-            insertSql = "INSERT INTO csv_data (";
-            for (int i = 0; i < headers.length; i++) {
-                insertSql += "`" + headers[i] + "`";
-                if (i < headers.length - 1) {
-                    insertSql += ", ";
-                }
-            }
-            insertSql += ") VALUES (";
-            for (int i = 0; i < headers.length; i++) {
-                insertSql += "?";
-                if (i < headers.length - 1) {
-                    insertSql += ", ";
-                }
-            }
-            insertSql += ")";
-
-            String line;
-            List<String> batch = new ArrayList<>();
-            int batchSize = 500;
-
-            if (!hasHeader) {
-                line = br.readLine();
-                if (line != null) {
-                    batch.add(line);
-                    totalRows.incrementAndGet();
-                }
-            }
-
-            while ((line = br.readLine()) != null) {
-                batch.add(line);
-                totalRows.incrementAndGet();
-                if (batch.size() >= batchSize) {
-                    csvQueue.put(new ArrayList<>(batch));
-                    batch.clear();
-                }
-            }
-
-            if (!batch.isEmpty()) {
-                csvQueue.put(batch);
-            }
-
-            csvQueue.put(Collections.emptyList());
-
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Erro ao ler o arquivo CSV.", "Erro", JOptionPane.ERROR_MESSAGE);
-        } finally {
-            if (br != null) {
-                try {
-                    br.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-    }
-
-    private void processCsvLines() throws InterruptedException {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db");
-             PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
-            conn.setAutoCommit(false);
-            while (true) {
-                List<String> batch = csvQueue.take();
-                if (batch.isEmpty()) {
-                    break;
-                }
-                for (String line : batch) {
-                    String[] values = parseCsvLine(line);
-                    for (int i = 0; i < values.length; i++) {
-                        pstmt.setString(i + 1, values[i]);
+        executor.execute(() -> {
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db");
+                 PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+                conn.setAutoCommit(false);
+                while (!leituraFinalizada.get() || !csvQueue.isEmpty()) {
+                    List<String> batch = csvQueue.poll(1, TimeUnit.SECONDS);
+                    if (batch == null || batch.isEmpty()) continue;
+                    for (String line : batch) {
+                        String[] values = parseCsvLine(line);
+                        for (int i = 0; i < values.length; i++) {
+                            pstmt.setString(i + 1, values[i]);
+                        }
+                        pstmt.addBatch();
                     }
-                    pstmt.addBatch();
+                    pstmt.executeBatch();
+                    conn.commit();
+                    insertedRows.addAndGet(batch.size());
+                    System.out.println("Inseridos: " + insertedRows.get() + " / Total: " + totalRows.get());
                 }
-                pstmt.executeBatch();
-                conn.commit();
-                insertedRows.addAndGet(batch.size());
-                System.out.println("Inseridos: " + insertedRows + " / Total: " + totalRows);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-            conn.setAutoCommit(true);
-        } catch (SQLException e) {
-            e.printStackTrace();
-            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(this, "Erro ao inserir dados no SQLite.", "Erro", JOptionPane.ERROR_MESSAGE));
-        }
+        });
     }
 
     private String[] parseCsvLine(String line) {
         List<String> values = new ArrayList<>();
         boolean inQuotes = false;
         StringBuilder currentVal = new StringBuilder();
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            if (c == ',' && !inQuotes) {
+        for (char c : line.toCharArray()) {
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
                 values.add(currentVal.toString());
                 currentVal.setLength(0);
-            } else if (c == '"') {
-                inQuotes = !inQuotes;
             } else {
                 currentVal.append(c);
             }
@@ -393,255 +161,8 @@ public class CsvReader extends JFrame {
         values.add(currentVal.toString());
         return values.toArray(new String[0]);
     }
-    private void displayDataFromSqlite(int page) {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db");
-             Statement stmt = conn.createStatement()) {
-            int offset = (page - 1) * rowsPerPage;
-            String query = "SELECT * FROM csv_data LIMIT " + rowsPerPage + " OFFSET " + offset;
-            ResultSet rs = stmt.executeQuery(query);
-            ResultSetMetaData metaData = rs.getMetaData();
-            int columnCount = metaData.getColumnCount();
-            // Configura o cabeçalho da tabela
-            String[] columnNames = new String[columnCount];
-            for (int i = 1; i <= columnCount; i++) {
-                columnNames[i - 1] = metaData.getColumnName(i);
-            }
-            tableModel.setColumnIdentifiers(columnNames);
-            // Limpa a tabela e adiciona os dados
-            tableModel.setRowCount(0);
-            while (rs.next()) {
-                Object[] rowData = new Object[columnCount];
-                for (int i = 1; i <= columnCount; i++) {
-                    rowData[i - 1] = rs.getString(i);
-                }
-                tableModel.addRow(rowData);
-            }
-            rs.close();
-        } catch (SQLException e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Erro ao buscar dados do SQLite.", "Erro", JOptionPane.ERROR_MESSAGE);
-        }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new CsvReader().setVisible(true));
     }
-
-    private void saveCsv() {
-        if (currentFile == null) {
-            JOptionPane.showMessageDialog(this, "Nenhum arquivo carregado para salvar!", "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(currentFile))) {
-            boolean hasHeader = headerYes.isSelected();
-            if(hasHeader) {
-                // Escreve o cabeçalho
-                for (int i = 1; i < tableModel.getColumnCount(); i++) {
-                    bw.write(tableModel.getColumnName(i));
-                    if (i < tableModel.getColumnCount() - 1) {
-                        bw.write(",");
-                    }
-                }
-                bw.newLine();
-            }
-
-            // Escreve os dados
-            for (int row = 0; row < tableModel.getRowCount(); row++) {
-                for (int col = 1; col < tableModel.getColumnCount(); col++) {
-                    bw.write(tableModel.getValueAt(row, col).toString());
-                    if (col < tableModel.getColumnCount() - 1) {
-                        bw.write(",");
-                    }
-                }
-                bw.newLine();
-            }
-            JOptionPane.showMessageDialog(this, "Arquivo salvo com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Erro ao salvar o arquivo!", "Erro", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void exportAsSql() {
-        if (tableModel.getRowCount() == 0) {
-            JOptionPane.showMessageDialog(this, "Nenhum dado para exportar!", "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        String tableName = JOptionPane.showInputDialog(this, "Nome da tabela:", "Exportar como SQL", JOptionPane.PLAIN_MESSAGE);
-        if (tableName == null || tableName.trim().isEmpty()) {
-            return;
-        }
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setSelectedFile(new File(tableName + ".sql"));
-        int option = fileChooser.showSaveDialog(this);
-        if (option != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        File sqlFile = fileChooser.getSelectedFile();
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(sqlFile))) {
-            // Monta os nomes das colunas (exceto o ID, que está na posição 0)
-            int colCount = tableModel.getColumnCount();
-            StringBuilder columns = new StringBuilder();
-            for (int i = 1; i < colCount; i++) {
-                columns.append("`").append(tableModel.getColumnName(i)).append("`");
-                if (i < colCount - 1) columns.append(", ");
-            }
-            for (int row = 0; row < tableModel.getRowCount(); row++) {
-                StringBuilder values = new StringBuilder();
-                for (int col = 1; col < colCount; col++) {
-                    Object val = tableModel.getValueAt(row, col);
-                    String escaped = val != null ? val.toString().replace("'", "''") : "";
-                    values.append("'").append(escaped).append("'");
-                    if (col < colCount - 1) values.append(", ");
-                }
-                String insert = String.format("INSERT INTO `%s` (%s) VALUES (%s);", tableName, columns, values);
-                writer.write(insert);
-                writer.newLine();
-            }
-            JOptionPane.showMessageDialog(this, "Arquivo SQL exportado com sucesso!", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
-        } catch (IOException ex) {
-            JOptionPane.showMessageDialog(this, "Erro ao salvar arquivo SQL!", "Erro", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void editSelectedCell() {
-        int selectedRow = table.getSelectedRow();
-        int selectedColumn = table.getSelectedColumn();
-        if (selectedRow == -1 || selectedColumn == -1) {
-            JOptionPane.showMessageDialog(this, "Selecione uma célula para editar.", "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        // Converte para o índice do modelo (por causa do RowSorter)
-        selectedRow = table.convertRowIndexToModel(selectedRow);
-        selectedColumn = table.convertColumnIndexToModel(selectedColumn);
-        Object currentValue = tableModel.getValueAt(selectedRow, selectedColumn);
-        JTextField textField = new JTextField(currentValue != null ? currentValue.toString() : "");
-        int result = JOptionPane.showConfirmDialog(
-                this,
-                textField,
-                "Editar valor da célula",
-                JOptionPane.OK_CANCEL_OPTION
-        );
-        if (result == JOptionPane.OK_OPTION) {
-            String newValue = textField.getText();
-            tableModel.setValueAt(newValue, selectedRow, selectedColumn);
-            saveCsv();
-        }
-    }
-
-    private void showLoadingDialog() {
-        loadingDialog = new JDialog(this, "Carregando...", true);
-        loadingDialog.setSize(200, 100);
-        loadingDialog.setLocationRelativeTo(this);
-        loadingDialog.setLayout(new FlowLayout());
-
-        JLabel loadingLabel = new JLabel("Processando...");
-        loadingDialog.add(loadingLabel);
-
-        loadingDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-        progressLabel = new JLabel("Linhas processadas: 0");
-        loadingDialog.add(progressLabel);
-
-        SwingUtilities.invokeLater(() -> loadingDialog.setVisible(true));
-    }
-
-    private void hideLoadingDialog() {
-        if (loadingDialog != null) {
-            loadingDialog.dispose();
-        }
-    }
-
-    private class CsvLoader extends SwingWorker<Void, Void> {
-        private File file;
-
-        public CsvLoader(File file) {
-            this.file = file;
-        }
-
-        @Override
-        protected Void doInBackground() {
-            return null;
-        }
-
-        @Override
-        protected void done() {
-//            hideLoadingDialog();
-        }
-    }
-
-
-
-    private void addRecord() {
-        if (inputFields == null || inputFields.isEmpty()) return;
-        String[] rowData = new String[inputFields.size() + 1];
-        rowData[0] = String.valueOf(tableModel.getRowCount() + 1);
-        for (int i = 0; i < inputFields.size(); i++) {
-            rowData[i + 1] = inputFields.get(i).getText();
-        }
-        //... pega as informações inseridas na tela.
-        executor.execute(() -> {
-            try {
-                PreparedStatement threadStmt = conexaoCompartilhada.prepareStatement(insertSql);
-                //... usar o insertSql aqui para inserir os dados.
-                threadStmt.executeUpdate();
-                threadStmt.close();
-            } catch (SQLException e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Erro ao inserir dados no SQLite.", "Erro", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-    }
-
-    public void dispose() {
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
-        } catch (InterruptedException ex) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-        try {
-            if (conexaoCompartilhada != null && !conexaoCompartilhada.isClosed()){
-                conexaoCompartilhada.close();
-            }
-        }catch(SQLException e){
-            e.printStackTrace();
-        }
-    }
-
-
-    private void addNewColumnAndSave() {
-        if (currentFile == null) {
-            JOptionPane.showMessageDialog(this, "Nenhum CSV carregado.");
-            return;
-        }
-        int rowCount = tableModel.getRowCount();
-        int colCount = tableModel.getColumnCount();
-        // Salva os dados atuais
-        Object[][] data = new Object[rowCount][colCount];
-        for (int i = 0; i < rowCount; i++) {
-            for (int j = 0; j < colCount; j++) {
-                data[i][j] = tableModel.getValueAt(i, j);
-            }
-        }
-
-        String[] newColumns = new String[colCount + 1];
-        for (int i = 0; i < colCount; i++) {
-            newColumns[i] = tableModel.getColumnName(i);
-        }
-        newColumns[colCount] = "";
-
-        tableModel.setDataVector(new Object[0][0], newColumns);
-        for (int i = 0; i < rowCount; i++) {
-            Object[] newRow = new Object[newColumns.length];
-            System.arraycopy(data[i], 0, newRow, 0, data[i].length);
-            newRow[newRow.length - 1] = "";
-            tableModel.addRow(newRow);
-        }
-
-        saveCsv();
-    }
-
-    public List<Object[]> getDadosLidos() {
-        return dadosLidos;
-    }
-
 }
