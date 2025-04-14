@@ -14,9 +14,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class CsvReader extends JFrame {
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
-    private final JCheckBox headerYes = new JCheckBox("Header", true);
+    private final JCheckBox headerYes = new JCheckBox("Possui cabeçalho", true);
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
-    private final BlockingQueue<List<String>> csvQueue = new LinkedBlockingQueue<>();
+    BlockingQueue<List<String>> csvQueue = new ArrayBlockingQueue<>(50);
     private final AtomicInteger totalRows = new AtomicInteger(0);
     private final AtomicInteger insertedRows = new AtomicInteger(0);
     private final int batchSize = 500;
@@ -91,7 +91,6 @@ public class CsvReader extends JFrame {
         boolean hasHeader = headerYes.isSelected();
         leituraFinalizada.set(false);
 
-
         executor.execute(() -> {
             try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
                 String line = br.readLine();
@@ -99,17 +98,20 @@ public class CsvReader extends JFrame {
                     csvQueue.put(List.of(line));
                     totalRows.incrementAndGet();
                 }
-                List<String> batch = new ArrayList<>();
+
+                List<String> chunk = new ArrayList<>(batchSize);
                 while ((line = br.readLine()) != null) {
-                    batch.add(line);
+                    chunk.add(line);
                     totalRows.incrementAndGet();
-                    if (batch.size() >= batchSize) {
-                        csvQueue.put(new ArrayList<>(batch));
-                        batch.clear();
+
+                    if (chunk.size() >= batchSize) {
+                        csvQueue.put(new ArrayList<>(chunk));
+                        chunk.clear();
                     }
                 }
-                if (!batch.isEmpty()) {
-                    csvQueue.put(batch);
+
+                if (!chunk.isEmpty()) {
+                    csvQueue.put(chunk);
                 }
             } catch (Exception e) {
                 e.printStackTrace();
@@ -117,31 +119,37 @@ public class CsvReader extends JFrame {
                 leituraFinalizada.set(true);
             }
         });
+        int consumidores = 2;
 
+        for (int j = 0; j < consumidores; j++) {
+            executor.execute(() -> {
 
-        executor.execute(() -> {
-            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db");
-                 PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
-                conn.setAutoCommit(false);
-                while (!leituraFinalizada.get() || !csvQueue.isEmpty()) {
-                    List<String> batch = csvQueue.poll(1, TimeUnit.SECONDS);
-                    if (batch == null || batch.isEmpty()) continue;
-                    for (String line : batch) {
-                        String[] values = parseCsvLine(line);
-                        for (int i = 0; i < values.length; i++) {
-                            pstmt.setString(i + 1, values[i]);
+                try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db");
+                     PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+                    conn.setAutoCommit(false);
+                    while (!leituraFinalizada.get() || !csvQueue.isEmpty()) {
+                        List<String> chunk = csvQueue.poll(1, TimeUnit.SECONDS);
+                        if (chunk == null || chunk.isEmpty()) continue;
+
+                        for (String line : chunk) {
+                            String[] values = parseCsvLine(line);
+                            for (int i = 0; i < values.length; i++) {
+                                pstmt.setString(i + 1, values[i]);
+                            }
+                            pstmt.addBatch();
                         }
-                        pstmt.addBatch();
+
+                        pstmt.executeBatch();
+                        conn.commit();
+                        insertedRows.addAndGet(chunk.size());
+
+                        System.out.println("Inseridos: " + insertedRows.get());
                     }
-                    pstmt.executeBatch();
-                    conn.commit();
-                    insertedRows.addAndGet(batch.size());
-                    System.out.println("Inseridos: " + insertedRows.get() + " / Total: " + totalRows.get());
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
+            });
+        }
     }
 
     private String[] parseCsvLine(String line) {
