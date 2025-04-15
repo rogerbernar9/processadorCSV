@@ -1,4 +1,4 @@
-package org.example.swing;
+package org.processadorcsv.viewmodel;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -27,7 +27,7 @@ public class CsvReader extends JFrame {
     private final int rowsPerPage = 1000;
 
     public CsvReader() {
-        setTitle("CSV Processor");
+        setTitle("CSV Processador");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(800, 600);
         setLayout(new BorderLayout());
@@ -36,6 +36,17 @@ public class CsvReader extends JFrame {
         add(loadButton, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
         add(headerYes, BorderLayout.SOUTH);
+
+        JButton viewDataButton = new JButton("Visualizar dados");
+        viewDataButton.addActionListener(e -> {
+            JFrame dataFrame = new JFrame("Dados CSV");
+            dataFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            dataFrame.setSize(800, 600);
+            dataFrame.setLocationRelativeTo(this);
+            dataFrame.add(new VisualizadorDados());
+            dataFrame.setVisible(true);
+        });
+        add(viewDataButton, BorderLayout.EAST);
     }
 
     private void loadCsv() {

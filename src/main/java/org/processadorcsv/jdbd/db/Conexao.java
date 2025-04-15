@@ -1,6 +1,4 @@
-package org.example.jdbd.db;
-
-import org.mariadb.jdbc.client.result.Result;
+package org.processadorcsv.jdbd.db;
 
 import java.sql.Connection;
 import java.sql.DriverManager;

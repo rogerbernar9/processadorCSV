@@ -1,8 +1,7 @@
-package org.example;
+package org.processadorcsv;
 
 
-import org.example.swing.CsvReader;
-import org.example.swing.LoginLDAPView;
+import org.processadorcsv.viewmodel.LoginLDAPView;
 
 import javax.swing.*;
 

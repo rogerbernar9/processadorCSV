@@ -1,6 +1,6 @@
-package org.example.swing;
+package org.processadorcsv.viewmodel;
 
-import org.csvprocessor.service.AutenticadorLDAP;
+import org.processadorcsv.security.AutenticadorLDAP;
 
 import javax.swing.*;
 import java.awt.*;
@@ -26,7 +26,7 @@ public class LoginLDAPView extends JFrame {
             if (AutenticadorLDAP.autenticar(usuario, senha)) {
                 dispose();
                 javax.swing.SwingUtilities.invokeLater(() -> {
-                    new org.example.swing.CsvReader().setVisible(true);
+                    new org.processadorcsv.viewmodel.CsvReader().setVisible(true);
                 });
             } else {
                 JOptionPane.showMessageDialog(this, "Usuário ou senha inválidos!");
