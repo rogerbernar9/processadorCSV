@@ -39,12 +39,10 @@ public class CsvReader extends JFrame {
 
         JButton viewDataButton = new JButton("Visualizar dados");
         viewDataButton.addActionListener(e -> {
-            JFrame dataFrame = new JFrame("Dados CSV");
-            dataFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-            dataFrame.setSize(800, 600);
-            dataFrame.setLocationRelativeTo(this);
-            dataFrame.add(new VisualizadorDados());
-            dataFrame.setVisible(true);
+            VisualizadorDados visualizadorDados = new VisualizadorDados();
+            visualizadorDados.setVisible(true);
+            this.setVisible(false);
+
         });
         add(viewDataButton, BorderLayout.EAST);
     }

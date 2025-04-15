@@ -7,24 +7,30 @@ import java.sql.*;
 import java.util.Vector;
 
 
-public class VisualizadorDados extends JPanel {
+public class VisualizadorDados extends JFrame {
 
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
     private final JTextField filterField = new JTextField(50);
     private final JButton previousButton = new JButton("Anterior");
     private final JButton nextButton = new JButton("Próximo");
+    private final JButton telaAnterior = new JButton("Tela Principal");
     private int currentPage = 0;
     private final int pageSize = 100;
 
 
     public VisualizadorDados() {
+        setTitle("CSV Processador");
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setSize(1000, 600);
         setLayout(new BorderLayout());
+
         JPanel topPanel = new JPanel();
         JButton loadButton = new JButton("Carregar dados");
         topPanel.add(new JLabel("Filtro:"));
         topPanel.add(filterField);
         topPanel.add(loadButton);
+        topPanel.add(telaAnterior);
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
         JPanel bottomPanel = new JPanel();
@@ -45,6 +51,10 @@ public class VisualizadorDados extends JPanel {
         nextButton.addActionListener(e -> {
             currentPage++;
             loadData();
+        });
+        telaAnterior.addActionListener(e -> {
+            new CsvReader().setVisible(true);
+            this.setVisible(false);
         });
     }
 
