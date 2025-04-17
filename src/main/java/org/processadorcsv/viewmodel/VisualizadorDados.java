@@ -1,5 +1,7 @@
 package org.processadorcsv.viewmodel;
 
+import org.processadorcsv.jdbd.db.DatabaseUtil;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -59,7 +61,7 @@ public class VisualizadorDados extends JFrame {
     }
 
     private void loadData() {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db")) {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath())) {
             Statement stmt = conn.createStatement();
             ResultSet rsColumns = stmt.executeQuery("PRAGMA table_info(csv_data)");
             Vector<String> columns = new Vector<>();

@@ -1,5 +1,7 @@
 package org.processadorcsv.viewmodel;
 
+import org.processadorcsv.jdbd.db.DatabaseUtil;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
@@ -12,6 +14,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class CsvReader extends JFrame {
+
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
     private final JCheckBox headerYes = new JCheckBox("Possui cabeçalho", true);
@@ -58,7 +61,7 @@ public class CsvReader extends JFrame {
     }
 
     private void createSqliteDatabase(File csvFile) {
-        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db")) {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath())) {
             Statement stmt = conn.createStatement();
             stmt.executeUpdate("DROP TABLE IF EXISTS csv_data");
 
@@ -133,7 +136,7 @@ public class CsvReader extends JFrame {
         for (int j = 0; j < consumidores; j++) {
             executor.execute(() -> {
 
-                try (Connection conn = DriverManager.getConnection("jdbc:sqlite:data.db");
+                try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath());
                      PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
                     conn.setAutoCommit(false);
                     while (!leituraFinalizada.get() || !csvQueue.isEmpty()) {

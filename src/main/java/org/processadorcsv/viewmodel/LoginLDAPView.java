@@ -26,7 +26,7 @@ public class LoginLDAPView extends JFrame {
             if (AutenticadorLDAP.autenticar(usuario, senha)) {
                 dispose();
                 javax.swing.SwingUtilities.invokeLater(() -> {
-                    new org.processadorcsv.viewmodel.CsvReader().setVisible(true);
+                    new CsvReader().setVisible(true);
                 });
             } else {
                 JOptionPane.showMessageDialog(this, "Usuário ou senha inválidos!");

@@ -17,6 +17,30 @@ Aplicação desktop em Java (Swing) para leitura, visualização e inserção de
 - ExecutorService (multithread)
 - JTable com paginação
 - Maven (recomendado para empacotamento)
+
+## Funcionalidades
+-  Processamento em paralelo
+-  Usa ExecutorService com múltiplas threads: leitura e escrita simultânea.
+
+-  Leitura em blocos (chunking)
+-  Evita processar linha por linha — agrupa em blocos (batchSize = 500), o que reduz overhead de I/O e melhora performance de banco.
+
+-  Inserções com PreparedStatement em lote
+-  Usa addBatch() e executeBatch(), o que é MUITO mais rápido do que executar linha por linha.
+
+-  Uso de SQLite
+-  SQLite é eficiente para arquivos locais, e você está desativando o autocommit (conn.setAutoCommit(false)), o que é essencial para performance.
+
+-  Fila concorrente (BlockingQueue)
+-  Boa separação entre produtor (leitor) e consumidores (inseridores). Evita gargalos.
+
+## Tecnologias utilizadas
+- Java 17+
+- Swing (UI)
+- JDBC + SQLite
+- ExecutorService (multithread)
+- JTable com paginação
+- Maven (recomendado para empacotamento)
 ## Como usar
 1. **Clone o repositório:**
 ```bash
@@ -26,6 +50,8 @@ cd processadorCSV
 Com Java:
 javac -d out -cp ".;sqlite-jdbc-<versão>.jar" src/org/example/swing/*.java
 java -cp ".;out;sqlite-jdbc-<versão>.jar" org.example.swing.CsvReader
+Ou
+java -cp "ProcessadorCSV-1.0-SNAPSHOT.jar:sqlite-jdbc-3.45.1.0.jar" org.processadorcsv.Main
 Ou utilizando uma IDE como IntelliJ ou Eclipse, basta importar o projeto e executar a classe CsvReader.
 3. Passos na interface:
 Clique em "Carregar CSV" e selecione o arquivo desejado.
