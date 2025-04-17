@@ -18,7 +18,7 @@ Aplicação desktop em Java (Swing) para leitura, visualização e inserção de
 - JTable com paginação
 - Maven (recomendado para empacotamento)
 
-## Funcionalidades
+## Implementações
 -  Processamento em paralelo
 -  Usa ExecutorService com múltiplas threads: leitura e escrita simultânea.
 
