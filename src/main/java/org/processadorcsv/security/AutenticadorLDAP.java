@@ -24,6 +24,7 @@ public class AutenticadorLDAP {
             ctx.close();
             return true;
         } catch (AuthenticationException e) {
+            System.err.println("Erro LDAP: " + e.getMessage());
             return false;
         } catch (NamingException e) {
             System.err.println("Erro LDAP: " + e.getMessage());

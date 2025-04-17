@@ -15,7 +15,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class CsvReader extends JFrame {
 
-    public String dbPath = "/home/roger/Imagens/Documentos/data.db";
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
     private final JCheckBox headerYes = new JCheckBox("Possui cabeçalho", true);

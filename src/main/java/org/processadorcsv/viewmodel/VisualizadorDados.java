@@ -11,8 +11,6 @@ import java.util.Vector;
 
 public class VisualizadorDados extends JFrame {
 
-    public String dbPath = "/home/roger/Imagens/Documentos/data.db";
-
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
     private final JTextField filterField = new JTextField(50);
