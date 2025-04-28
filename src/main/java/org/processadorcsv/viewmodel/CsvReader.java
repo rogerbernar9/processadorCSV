@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Pattern;
 
 public class CsvReader extends JFrame {
 
@@ -28,6 +29,9 @@ public class CsvReader extends JFrame {
     private String[] headers;
     private String insertSql;
     private final int rowsPerPage = 1000;
+
+    private String separator = ","; // adicionar isso como atributo da classe
+
 
     public CsvReader() {
         setTitle("CSV Processador");
@@ -61,6 +65,7 @@ public class CsvReader extends JFrame {
     }
 
     private void createSqliteDatabase(File csvFile) {
+
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath())) {
             Statement stmt = conn.createStatement();
             stmt.executeUpdate("DROP TABLE IF EXISTS csv_data");
@@ -69,15 +74,17 @@ public class CsvReader extends JFrame {
 
             try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
                 String firstLine = br.readLine();
+                String separator = detectaSeparator(firstLine); // detecta o separador
+                this.separator = separator;
+
                 if (firstLine != null) {
-                    String[] columns = firstLine.split(",");
+                    String[] columns = firstLine.split(Pattern.quote(separator));
                     headers = new String[columns.length];
 
+                    Random random = new Random();
                     for (int i = 0; i < columns.length; i++) {
-                        String clean = columns[i].replaceAll("[^a-zA-Z0-9_]", "");
-                        if (clean.matches("^\\d+$")) {
-                            clean = "col_" + clean;
-                        }
+                        String randomSuffix = String.format("%03d", random.nextInt(1000)); // 3 dígitos aleatórios
+                        String clean = "col_" + i + "_" + randomSuffix;
                         headers[i] = clean;
                         createTableSql += "`" + clean + "` TEXT";
                         if (i < columns.length - 1) {
@@ -88,6 +95,7 @@ public class CsvReader extends JFrame {
             }
 
             createTableSql += ")";
+            System.out.println(createTableSql);
             stmt.executeUpdate(createTableSql);
 
             insertSql = "INSERT INTO csv_data (" +
@@ -145,8 +153,9 @@ public class CsvReader extends JFrame {
 
                         for (String line : chunk) {
                             String[] values = parseCsvLine(line);
-                            for (int i = 0; i < values.length; i++) {
-                                pstmt.setString(i + 1, values[i]);
+                            for (int i = 0; i < headers.length; i++) {
+                                String value = i < values.length ? values[i] : null;
+                                pstmt.setString(i + 1, value);
                             }
                             pstmt.addBatch();
                         }
@@ -171,15 +180,29 @@ public class CsvReader extends JFrame {
         for (char c : line.toCharArray()) {
             if (c == '"') {
                 inQuotes = !inQuotes;
-            } else if (c == ',' && !inQuotes) {
+            } else if (String.valueOf(c).equals(separator) && !inQuotes) {
                 values.add(currentVal.toString());
                 currentVal.setLength(0);
             } else {
                 currentVal.append(c);
             }
         }
-        values.add(currentVal.toString());
+        values.add(currentVal.toString().replaceAll("^\"|\"$", ""));
         return values.toArray(new String[0]);
+    }
+
+    private String detectaSeparator(String line) {
+        String[] possibleSeparators = {",", ";", "\t", "|"};
+        int maxCount = 0;
+        String detected = ",";
+        for (String sep : possibleSeparators) {
+            int count = line.split(Pattern.quote(sep), -1).length;
+            if (count > maxCount) {
+                maxCount = count;
+                detected = sep;
+            }
+        }
+        return detected;
     }
 
     public static void main(String[] args) {
