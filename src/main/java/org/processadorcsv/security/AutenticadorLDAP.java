@@ -10,9 +10,9 @@ import java.util.Hashtable;
 public class AutenticadorLDAP {
 
     public static boolean autenticar(String usuario, String senha) {
-        String ldapURL = "ldap://172.17.1.7:389";
-        String baseDN = "dc=empresa,dc=local";
-        String userDN = "pmsg\\" + usuario;
+        String ldapURL = "";
+        String baseDN = "";
+        String userDN = "" + usuario;
         Hashtable<String, String> env = new Hashtable<>();
         env.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
         env.put(Context.PROVIDER_URL, ldapURL);
