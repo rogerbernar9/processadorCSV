@@ -46,14 +46,15 @@ Aplicação desktop em Java (Swing) para leitura, visualização e inserção de
 ```bash
 git clone https://github.com/rogerbernar9/processadorCSV.git
 cd processadorCSV
-2. Compile e execute:
+2. Instale o JRE ou JDK 17+
+3. Compile e execute:
 Com Java:
 javac -d out -cp ".;sqlite-jdbc-<versão>.jar" src/org/example/swing/*.java
 java -cp ".;out;sqlite-jdbc-<versão>.jar" org.example.swing.CsvReader
 Ou
 java -cp "ProcessadorCSV-1.0-SNAPSHOT.jar:sqlite-jdbc-3.45.1.0.jar" org.processadorcsv.Main
 Ou utilizando uma IDE como IntelliJ ou Eclipse, basta importar o projeto e executar a classe CsvReader.
-3. Passos na interface:
+4. Passos na interface:
 Clique em "Carregar CSV" e selecione o arquivo desejado.
 Aguarde o processamento (ocorre em segundo plano).
 Clique em "Visualizar dados" para abrir a janela de navegação dos dados.
