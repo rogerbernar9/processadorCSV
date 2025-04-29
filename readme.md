@@ -1,7 +1,8 @@
 ---
 # Processador CSV
-Aplicação desktop em Java (Swing) para leitura, visualização e inserção de arquivos CSV em um banco de dados SQLite com suporte a carregamento assíncrono, multithread e paginação.
+Aplicação desktop em Java (Swing) apresentando grande performance para leitura, visualização e inserção de arquivos CSV em um banco de dados SQLite com suporte a carregamento assíncrono, multithread e paginação.
 ## Funcionalidades
+- Capacidades de leitura de grandes volumes de dados de planilhas CSV, suportando leitura em threads separadas para evitar travamento e usa banco de dados interno para performance na visualização dos dados
 - Interface Swing amigável para seleção e leitura de arquivos `.csv`.
 - Suporte a arquivos com ou sem cabeçalho.
 - Inserção rápida no banco de dados utilizando múltiplas threads e `batch insert`.
