@@ -28,11 +28,9 @@ Aplicação desktop em Java (Swing) para leitura, visualização e inserção de
 -  Inserções com PreparedStatement em lote
 -  Usa addBatch() e executeBatch(), o que é MUITO mais rápido do que executar linha por linha.
 
--  Uso de SQLite
--  SQLite é eficiente para arquivos locais, e você está desativando o autocommit (conn.setAutoCommit(false)), o que é essencial para performance.
-
+-  Uso de SQLite para a performance da aplicação
 -  Fila concorrente (BlockingQueue)
--  Boa separação entre produtor (leitor) e consumidores (inseridores). Evita gargalos.
+-  Separação entre produtor (leitor) e consumidores (inseridores). Evita gargalos.
 
 ## Tecnologias utilizadas
 - Java 17+
@@ -56,10 +54,11 @@ java -cp "ProcessadorCSV-1.0-SNAPSHOT.jar:sqlite-jdbc-3.45.1.0.jar" org.processa
 Ou utilizando uma IDE como IntelliJ ou Eclipse, basta importar o projeto e executar a classe CsvReader.
 4. Passos na interface:
 Clique em "Carregar CSV" e selecione o arquivo desejado.
-Aguarde o processamento (ocorre em segundo plano).
+Aguarde o processamento (ocorre em segundo plano), será criado em '/home/seuusuario/.processadorcsv' o arquivo BD local do sqlite 'data.db'.
 Clique em "Visualizar dados" para abrir a janela de navegação dos dados.
 ---
 Desenvolvido por Roger Bernar
+roger.bernar9@gmail.com
 ---
 
 
