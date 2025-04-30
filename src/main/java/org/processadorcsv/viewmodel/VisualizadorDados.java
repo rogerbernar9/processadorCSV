@@ -5,6 +5,7 @@ import org.processadorcsv.jdbd.db.DatabaseUtil;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.FileWriter;
 import java.sql.*;
 import java.util.Vector;
 
@@ -22,12 +23,15 @@ public class VisualizadorDados extends JFrame {
     private int currentPage = 0;
     private final int pageSize = 100;
     private final Vector<String> columnNames = new Vector<>();
-
+    JButton insertButton = new JButton("Inserir");
+    JButton editButton = new JButton("Editar");
+    JButton deleteButton = new JButton("Excluir");
+    JButton exportButton = new JButton("Exportar CSV");
 
     public VisualizadorDados() {
         setTitle("CSV Processador");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1300, 600);
+        setSize(1500, 600);
         setLayout(new BorderLayout());
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -43,6 +47,11 @@ public class VisualizadorDados extends JFrame {
 
         topPanel.add(loadButton);
         topPanel.add(telaAnterior);
+        topPanel.add(insertButton);
+        topPanel.add(editButton);
+        topPanel.add(deleteButton);
+        topPanel.add(exportButton);
+
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
 
@@ -64,20 +73,39 @@ public class VisualizadorDados extends JFrame {
             currentPage = 0;
             loadData();
         });
+
         previousButton.addActionListener(e -> {
             if (currentPage > 0) {
                 currentPage--;
                 loadData();
             }
         });
+
         nextButton.addActionListener(e -> {
             currentPage++;
             loadData();
         });
+
         telaAnterior.addActionListener(e -> {
             new CsvReader().setVisible(true);
             this.setVisible(false);
         });
+
+        insertButton.addActionListener(e -> abrirDialogDeInsercao());
+
+        editButton.addActionListener(e -> {
+            int selectedRow = table.getSelectedRow();
+            if (selectedRow >= 0) abrirDialogDeEdicao(selectedRow);
+            else JOptionPane.showMessageDialog(this, "Selecione uma linha para editar.");
+        });
+        deleteButton.addActionListener(e -> {
+            int selectedRow = table.getSelectedRow();
+            if (selectedRow >= 0) excluirRegistroSelecionado(selectedRow);
+            else JOptionPane.showMessageDialog(this, "Selecione uma linha para excluir.");
+        });
+        exportButton.addActionListener(e -> exportarParaCSV());
+
+
         loadColumnNames();
     }
 
@@ -184,5 +212,128 @@ public class VisualizadorDados extends JFrame {
             return "";
         }
     }
+
+    private void abrirDialogDeInsercao() {
+        JDialog dialog = new JDialog(this, "Inserir Registro", true);
+        dialog.setLayout(new GridLayout(columnNames.size() + 1, 2));
+        JTextField[] fields = new JTextField[columnNames.size()];
+        for (int i = 0; i < columnNames.size(); i++) {
+            dialog.add(new JLabel(columnNames.get(i)));
+            fields[i] = new JTextField();
+            dialog.add(fields[i]);
+        }
+        JButton salvar = new JButton("Salvar");
+        dialog.add(salvar);
+        salvar.addActionListener(e -> {
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+                StringBuilder sql = new StringBuilder("INSERT INTO csv_data (");
+                sql.append(String.join(", ", columnNames));
+                sql.append(") VALUES (");
+                sql.append("?, ".repeat(columnNames.size()));
+                sql.setLength(sql.length() - 2);
+                sql.append(")");
+                PreparedStatement ps = conn.prepareStatement(sql.toString());
+                for (int i = 0; i < fields.length; i++) ps.setString(i + 1, fields[i].getText());
+                ps.executeUpdate();
+                dialog.dispose();
+                loadData();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erro ao inserir registro");
+            }
+        });
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void abrirDialogDeEdicao(int rowIndex) {
+        JDialog dialog = new JDialog(this, "Editar Registro", true);
+        dialog.setLayout(new GridLayout(columnNames.size() + 1, 2));
+        JTextField[] fields = new JTextField[columnNames.size()];
+        for (int i = 0; i < columnNames.size(); i++) {
+            dialog.add(new JLabel(columnNames.get(i)));
+            fields[i] = new JTextField((String) tableModel.getValueAt(rowIndex, i));
+            dialog.add(fields[i]);
+        }
+        JButton salvar = new JButton("Salvar");
+        dialog.add(salvar);
+        salvar.addActionListener(e -> {
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+                StringBuilder sql = new StringBuilder("UPDATE csv_data SET ");
+                for (String col : columnNames) sql.append(col).append(" = ?, ");
+                sql.setLength(sql.length() - 2);
+                sql.append(" WHERE rowid = ?"); // rowid é suportado por SQLite se você não tiver id
+                PreparedStatement ps = conn.prepareStatement(sql.toString());
+                for (int i = 0; i < fields.length; i++) ps.setString(i + 1, fields[i].getText());
+                ps.setInt(columnNames.size() + 1, rowIndex + 1 + currentPage * pageSize);
+                ps.executeUpdate();
+                dialog.dispose();
+                loadData();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erro ao editar registro");
+            }
+        });
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
+    private void excluirRegistroSelecionado(int rowIndex) {
+        int confirm = JOptionPane.showConfirmDialog(this, "Tem certeza que deseja excluir?", "Confirmar", JOptionPane.YES_NO_OPTION);
+        if (confirm == JOptionPane.YES_OPTION) {
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+                PreparedStatement ps = conn.prepareStatement("DELETE FROM csv_data WHERE rowid = ?");
+                ps.setInt(1, rowIndex + 1 + currentPage * pageSize);
+                ps.executeUpdate();
+                loadData();
+            } catch (SQLException ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erro ao excluir registro");
+            }
+        }
+    }
+
+    private void exportarParaCSV() {
+        JFileChooser fileChooser = new JFileChooser();
+        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+                 Statement stmt = conn.createStatement();
+                 FileWriter writer = new FileWriter(fileChooser.getSelectedFile())) {
+
+                if (columnNames.isEmpty()) {
+                    loadColumnNames();
+                }
+
+                /**
+                 * ignora exportação dos nomes das colunas
+                for (int i = 0; i < columnNames.size(); i++) {
+                    writer.write(columnNames.get(i));
+                    if (i < columnNames.size() - 1) writer.write(",");
+                }
+                writer.write("\n");
+                 **/
+
+                String sql = "SELECT " + String.join(", ", columnNames) + " FROM csv_data";
+                ResultSet rs = stmt.executeQuery(sql);
+
+                while (rs.next()) {
+                    for (int i = 0; i < columnNames.size(); i++) {
+                        writer.write(rs.getString(columnNames.get(i)));
+                        if (i < columnNames.size() - 1) writer.write(",");
+                    }
+                    writer.write("\n");
+                }
+                JOptionPane.showMessageDialog(this, "Exportado com sucesso.");
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erro ao exportar CSV.");
+            }
+        }
+    }
+
+
+
 
 }
