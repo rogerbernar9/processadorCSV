@@ -14,9 +14,9 @@ public class VisualizadorDados extends JFrame {
 
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
-    private final JTextField filterField1 = new JTextField(25);
-    private final JTextField filterField2 = new JTextField(25);
-    private final JTextField filterField3 = new JTextField(25);
+    private final JTextField filterField1 = new JTextField(21);
+    private final JTextField filterField2 = new JTextField(21);
+    private final JTextField filterField3 = new JTextField(21);
     private final JButton previousButton = new JButton("Anterior");
     private final JButton nextButton = new JButton("Próximo");
     private final JButton telaAnterior = new JButton("Tela Principal");
@@ -31,7 +31,7 @@ public class VisualizadorDados extends JFrame {
     public VisualizadorDados() {
         setTitle("CSV Processador");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1500, 600);
+        setSize(1550, 600);
         setLayout(new BorderLayout());
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));

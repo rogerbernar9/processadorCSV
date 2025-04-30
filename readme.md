@@ -32,6 +32,7 @@ Aplicação desktop em Java (Swing) apresentando grande performance para leitura
 -  Uso de SQLite para a performance da aplicação
 -  Fila concorrente (BlockingQueue)
 -  Separação entre produtor (leitor) e consumidores (inseridores). Evita gargalos.
+-  Permite alterar, excluir, inserir dados gravados e exportar novamente para csv 
 
 ## Tecnologias utilizadas
 - Java 17+
