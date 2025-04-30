@@ -11,6 +11,8 @@ Aplicação desktop em Java (Swing) apresentando grande performance para leitura
     - Filtro textual por conteúdo.
 - Banco de dados SQLite gerado automaticamente.
 - Nome das colunas sanitizado para evitar conflitos com o SQLite.
+- Capacidade de inclusão, alteração, exclusão dos dados inseridos em seu banco de dados interno
+- Exportação dos dados de seu banco de dados interno SQLite para CSV
 ## Tecnologias utilizadas
 - Java 17+
 - Swing (UI)
