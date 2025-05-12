@@ -7,6 +7,8 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.FileWriter;
 import java.sql.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Vector;
 import java.util.List;
@@ -30,6 +32,7 @@ public class VisualizadorDados extends JFrame {
     JButton exportButton = new JButton("Exportar CSV");
     JButton exportSqlButton = new JButton("Exportar SQL");
     JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
+    JCheckBox[] parseDateChecks = new JCheckBox[columnNames.size()];
 
 
     public VisualizadorDados() {
@@ -340,45 +343,74 @@ public class VisualizadorDados extends JFrame {
         }
     }
 
-    private int countSelected(JCheckBox[] checks) {
-        int count = 0;
-        for (JCheckBox cb : checks) {
-            if (cb.isSelected()) count++;
-        }
-        return count;
-    }
-
     private void abrirDialogExportarSQL() {
         JDialog dialog = new JDialog(this, "Exportar SQL com personalização", true);
         dialog.setLayout(new BorderLayout());
         JPanel mainPanel = new JPanel(new BorderLayout());
-
         JPanel tableNamePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         tableNamePanel.add(new JLabel("Nome da Tabela:"));
         JTextField tableNameField = new JTextField("csv_data", 20);
         tableNamePanel.add(tableNameField);
-
-        JPanel customPanel = new JPanel(new GridLayout(columnNames.size(),  5, 5,5));
-        JTextField[] renamedFields = new JTextField[columnNames.size()];
-        JComboBox<String>[] typeSelectors = new JComboBox[columnNames.size()];
-        JCheckBox[] columnChecks = new JCheckBox[columnNames.size()];
+        // Componentes globais para o painel dinâmico
+        JPanel customPanel = new JPanel(new GridLayout(0, 6, 5, 5));
+        JScrollPane scrollPane = new JScrollPane(customPanel);
+        // Declarar arrays com tamanho máximo (ajustável se preferir usar listas)
+        final int MAX_COLUMNS = 100;
+        JCheckBox[] columnChecks = new JCheckBox[MAX_COLUMNS];
+        JTextField[] renamedFields = new JTextField[MAX_COLUMNS];
+        JComboBox<String>[] typeSelectors = new JComboBox[MAX_COLUMNS];
+        JCheckBox[] sanitizeChecks = new JCheckBox[MAX_COLUMNS];
+        JCheckBox[] parseDateChecks = new JCheckBox[MAX_COLUMNS];
         String[] tiposDados = {"VARCHAR", "INTEGER", "DATE", "BOOLEAN", "DOUBLE"};
-        JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
-        for (int i = 0; i < columnNames.size(); i++) {
-            String originalName = columnNames.get(i);
-            columnChecks[i] = new JCheckBox();
-            columnChecks[i].setSelected(true);
-            renamedFields[i] = new JTextField(originalName);
-            typeSelectors[i] = new JComboBox<>(tiposDados);
-            sanitizeChecks[i] = new JCheckBox("Limpar especiais");
-
-            customPanel.add(columnChecks[i]);
-            customPanel.add(new JLabel("Coluna: " + originalName));
-            customPanel.add(renamedFields[i]);
-            customPanel.add(typeSelectors[i]);
-            customPanel.add(sanitizeChecks[i]);
-
-        }
+        // Listas para armazenar os dados e nomes de colunas do banco
+        List<String> columnNames = new ArrayList<>();
+        List<List<Object>> dadosTabela = new ArrayList<>();
+        // Botão para carregar colunas do banco de dados
+        JButton carregarColunasButton = new JButton("Carregar Colunas");
+        carregarColunasButton.addActionListener(ev -> {
+            columnNames.clear();
+            dadosTabela.clear();
+            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+                 Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableNameField.getText().trim())) {
+                ResultSetMetaData meta = rs.getMetaData();
+                for (int i = 1; i <= meta.getColumnCount(); i++) {
+                    columnNames.add(meta.getColumnName(i));
+                }
+                while (rs.next()) {
+                    List<Object> linha = new ArrayList<>();
+                    for (int i = 1; i <= columnNames.size(); i++) {
+                        linha.add(rs.getObject(i));
+                    }
+                    dadosTabela.add(linha);
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(dialog, "Erro ao carregar dados do banco.");
+                return;
+            }
+            customPanel.removeAll();
+            for (int i = 0; i < columnNames.size(); i++) {
+                String originalName = columnNames.get(i);
+                columnChecks[i] = new JCheckBox();
+                columnChecks[i].setSelected(true);
+                renamedFields[i] = new JTextField(originalName);
+                typeSelectors[i] = new JComboBox<>(tiposDados);
+                sanitizeChecks[i] = new JCheckBox("Limpar especiais");
+                parseDateChecks[i] = new JCheckBox("Converter p/ Data");
+                customPanel.add(columnChecks[i]);
+                customPanel.add(new JLabel("Coluna: " + originalName));
+                customPanel.add(renamedFields[i]);
+                customPanel.add(typeSelectors[i]);
+                customPanel.add(sanitizeChecks[i]);
+                customPanel.add(parseDateChecks[i]);
+            }
+            customPanel.revalidate();
+            customPanel.repaint();
+        });
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(tableNamePanel, BorderLayout.WEST);
+        topPanel.add(carregarColunasButton, BorderLayout.EAST);
         JButton exportarButton = new JButton("Exportar SQL");
         exportarButton.addActionListener(e -> {
             try {
@@ -388,12 +420,11 @@ public class VisualizadorDados extends JFrame {
                     return;
                 }
                 StringBuilder sb = new StringBuilder();
-                for (int row = 0; row < tableModel.getRowCount(); row++) {
+                for (List<Object> row : dadosTabela) {
                     sb.append("INSERT INTO ").append(tableName).append(" (");
-                    // Adiciona nomes das colunas selecionadas
                     List<Integer> selectedIndexes = new ArrayList<>();
-                    for (int i = 0; i < columnChecks.length; i++) {
-                        if (columnChecks[i].isSelected()) {
+                    for (int i = 0; i < columnNames.size(); i++) {
+                        if (columnChecks[i] != null && columnChecks[i].isSelected()) {
                             selectedIndexes.add(i);
                             sb.append(renamedFields[i].getText());
                             if (selectedIndexes.size() < countSelected(columnChecks)) {
@@ -402,11 +433,10 @@ public class VisualizadorDados extends JFrame {
                         }
                     }
                     sb.append(") VALUES (");
-                    // Adiciona os valores correspondentes
                     for (int i = 0; i < selectedIndexes.size(); i++) {
                         int col = selectedIndexes.get(i);
                         String tipo = (String) typeSelectors[col].getSelectedItem();
-                        Object valor = tableModel.getValueAt(row, col);
+                        Object valor = row.get(col);
                         String valorFormatado;
                         if (valor == null) {
                             valorFormatado = "NULL";
@@ -417,7 +447,19 @@ public class VisualizadorDados extends JFrame {
                         } else {
                             String texto = valor.toString();
                             if (sanitizeChecks[col].isSelected()) {
-                                texto = texto.replaceAll("[.,\\-*]", ""); // Remove caracteres especiais
+                                texto = texto.replaceAll("[.,\\-*]", "");
+                            }
+                            if ("DATE".equals(tipo) && parseDateChecks[col].isSelected()) {
+                                try {
+                                    SimpleDateFormat inputFormat = new SimpleDateFormat("dd/MM/yyyy");
+                                    inputFormat.setLenient(false);
+                                    SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy-MM-dd");
+
+                                    java.util.Date data = inputFormat.parse(texto);
+                                    texto = outputFormat.format(data);
+                                } catch (ParseException ex) {
+                                    texto = "1970-01-01";
+                                }
                             }
                             valorFormatado = "'" + texto.replace("'", "''") + "'";
                         }
@@ -441,13 +483,20 @@ public class VisualizadorDados extends JFrame {
                 JOptionPane.showMessageDialog(this, "Erro ao exportar SQL.");
             }
         });
-        mainPanel.add(tableNamePanel, BorderLayout.NORTH);
-        mainPanel.add(new JScrollPane(customPanel), BorderLayout.CENTER);
-        dialog.add(mainPanel, BorderLayout.CENTER);
-        dialog.add(exportarButton, BorderLayout.SOUTH);
-        dialog.pack();
+        mainPanel.add(topPanel, BorderLayout.NORTH);
+        mainPanel.add(scrollPane, BorderLayout.CENTER);
+        mainPanel.add(exportarButton, BorderLayout.SOUTH);
+        dialog.add(mainPanel);
+        dialog.setSize(900, 500);
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
+    }
+    private int countSelected(JCheckBox[] boxes) {
+        int count = 0;
+        for (JCheckBox box : boxes) {
+            if (box != null && box.isSelected()) count++;
+        }
+        return count;
     }
     private void exportarDadosComoInsertSQL(String nomeTabela, String[] tipos) {
         JFileChooser fileChooser = new JFileChooser();
