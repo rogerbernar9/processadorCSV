@@ -35,7 +35,7 @@ Aplicação desktop em Java (Swing) apresentando grande performance para leitura
 -  Fila concorrente (BlockingQueue)
 -  Separação entre produtor (leitor) e consumidores (inseridores). Evita gargalos.
 -  Permite alterar, excluir, inserir dados gravados e exportar novamente para csv 
-
+-  Permite exportar como insert SQL, renomeando campos e sanitizando dados
 ## Tecnologias utilizadas
 - Java 17+
 - Swing (UI)

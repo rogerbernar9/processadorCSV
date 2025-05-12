@@ -7,8 +7,9 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.FileWriter;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.Vector;
-
+import java.util.List;
 
 public class VisualizadorDados extends JFrame {
 
@@ -27,11 +28,14 @@ public class VisualizadorDados extends JFrame {
     JButton editButton = new JButton("Editar");
     JButton deleteButton = new JButton("Excluir");
     JButton exportButton = new JButton("Exportar CSV");
+    JButton exportSqlButton = new JButton("Exportar SQL");
+    JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
+
 
     public VisualizadorDados() {
         setTitle("CSV Processador");
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setSize(1550, 600);
+        setSize(1600, 600);
         setLayout(new BorderLayout());
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -104,6 +108,9 @@ public class VisualizadorDados extends JFrame {
             else JOptionPane.showMessageDialog(this, "Selecione uma linha para excluir.");
         });
         exportButton.addActionListener(e -> exportarParaCSV());
+
+        topPanel.add(exportSqlButton);
+        exportSqlButton.addActionListener(e -> abrirDialogExportarSQL());
 
 
         loadColumnNames();
@@ -333,7 +340,143 @@ public class VisualizadorDados extends JFrame {
         }
     }
 
+    private int countSelected(JCheckBox[] checks) {
+        int count = 0;
+        for (JCheckBox cb : checks) {
+            if (cb.isSelected()) count++;
+        }
+        return count;
+    }
 
+    private void abrirDialogExportarSQL() {
+        JDialog dialog = new JDialog(this, "Exportar SQL com personalização", true);
+        dialog.setLayout(new BorderLayout());
+        JPanel mainPanel = new JPanel(new BorderLayout());
 
+        JPanel tableNamePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        tableNamePanel.add(new JLabel("Nome da Tabela:"));
+        JTextField tableNameField = new JTextField("csv_data", 20);
+        tableNamePanel.add(tableNameField);
+
+        JPanel customPanel = new JPanel(new GridLayout(columnNames.size(),  5, 5,5));
+        JTextField[] renamedFields = new JTextField[columnNames.size()];
+        JComboBox<String>[] typeSelectors = new JComboBox[columnNames.size()];
+        JCheckBox[] columnChecks = new JCheckBox[columnNames.size()];
+        String[] tiposDados = {"VARCHAR", "INTEGER", "DATE", "BOOLEAN", "DOUBLE"};
+        JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
+        for (int i = 0; i < columnNames.size(); i++) {
+            String originalName = columnNames.get(i);
+            columnChecks[i] = new JCheckBox();
+            columnChecks[i].setSelected(true);
+            renamedFields[i] = new JTextField(originalName);
+            typeSelectors[i] = new JComboBox<>(tiposDados);
+            sanitizeChecks[i] = new JCheckBox("Limpar especiais");
+
+            customPanel.add(columnChecks[i]);
+            customPanel.add(new JLabel("Coluna: " + originalName));
+            customPanel.add(renamedFields[i]);
+            customPanel.add(typeSelectors[i]);
+            customPanel.add(sanitizeChecks[i]);
+
+        }
+        JButton exportarButton = new JButton("Exportar SQL");
+        exportarButton.addActionListener(e -> {
+            try {
+                String tableName = tableNameField.getText().trim();
+                if (tableName.isEmpty()) {
+                    JOptionPane.showMessageDialog(dialog, "Informe um nome válido para a tabela.");
+                    return;
+                }
+                StringBuilder sb = new StringBuilder();
+                for (int row = 0; row < tableModel.getRowCount(); row++) {
+                    sb.append("INSERT INTO ").append(tableName).append(" (");
+                    // Adiciona nomes das colunas selecionadas
+                    List<Integer> selectedIndexes = new ArrayList<>();
+                    for (int i = 0; i < columnChecks.length; i++) {
+                        if (columnChecks[i].isSelected()) {
+                            selectedIndexes.add(i);
+                            sb.append(renamedFields[i].getText());
+                            if (selectedIndexes.size() < countSelected(columnChecks)) {
+                                sb.append(", ");
+                            }
+                        }
+                    }
+                    sb.append(") VALUES (");
+                    // Adiciona os valores correspondentes
+                    for (int i = 0; i < selectedIndexes.size(); i++) {
+                        int col = selectedIndexes.get(i);
+                        String tipo = (String) typeSelectors[col].getSelectedItem();
+                        Object valor = tableModel.getValueAt(row, col);
+                        String valorFormatado;
+                        if (valor == null) {
+                            valorFormatado = "NULL";
+                        } else if ("INTEGER".equals(tipo) || "DOUBLE".equals(tipo)) {
+                            valorFormatado = valor.toString();
+                        } else if ("BOOLEAN".equals(tipo)) {
+                            valorFormatado = Boolean.parseBoolean(valor.toString()) ? "TRUE" : "FALSE";
+                        } else {
+                            String texto = valor.toString();
+                            if (sanitizeChecks[col].isSelected()) {
+                                texto = texto.replaceAll("[.,\\-*]", ""); // Remove caracteres especiais
+                            }
+                            valorFormatado = "'" + texto.replace("'", "''") + "'";
+                        }
+                        sb.append(valorFormatado);
+                        if (i < selectedIndexes.size() - 1) sb.append(", ");
+                    }
+                    sb.append(");\n");
+                }
+                JFileChooser fileChooser = new JFileChooser();
+                fileChooser.setDialogTitle("Salvar como SQL");
+                int userSelection = fileChooser.showSaveDialog(this);
+                if (userSelection == JFileChooser.APPROVE_OPTION) {
+                    FileWriter writer = new FileWriter(fileChooser.getSelectedFile());
+                    writer.write(sb.toString());
+                    writer.close();
+                    JOptionPane.showMessageDialog(this, "Arquivo SQL exportado com sucesso!");
+                }
+                dialog.dispose();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Erro ao exportar SQL.");
+            }
+        });
+        mainPanel.add(tableNamePanel, BorderLayout.NORTH);
+        mainPanel.add(new JScrollPane(customPanel), BorderLayout.CENTER);
+        dialog.add(mainPanel, BorderLayout.CENTER);
+        dialog.add(exportarButton, BorderLayout.SOUTH);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+    private void exportarDadosComoInsertSQL(String nomeTabela, String[] tipos) {
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Salvar como SQL");
+        int userSelection = fileChooser.showSaveDialog(this);
+        if (userSelection != JFileChooser.APPROVE_OPTION) return;
+        try (FileWriter writer = new FileWriter(fileChooser.getSelectedFile())) {
+            for (int i = 0; i < tableModel.getRowCount(); i++) {
+                StringBuilder sb = new StringBuilder();
+                sb.append("INSERT INTO ").append(nomeTabela).append(" (")
+                        .append(String.join(", ", columnNames)).append(") VALUES (");
+                for (int j = 0; j < columnNames.size(); j++) {
+                    String value = String.valueOf(tableModel.getValueAt(i, j));
+                    if (tipos[j].toLowerCase().contains("int") || tipos[j].toLowerCase().contains("float")) {
+                        sb.append(value.isEmpty() ? "NULL" : value);
+                    } else {
+                        sb.append("'").append(value.replace("'", "''")).append("'");
+                    }
+                    if (j < columnNames.size() - 1) sb.append(", ");
+                }
+                sb.append(");\n");
+                writer.write(sb.toString());
+            }
+            writer.flush();
+            JOptionPane.showMessageDialog(this, "Exportação SQL concluída.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao exportar para SQL.");
+        }
+    }
 
 }
