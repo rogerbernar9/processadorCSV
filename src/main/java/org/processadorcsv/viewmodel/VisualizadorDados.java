@@ -24,7 +24,7 @@ public class VisualizadorDados extends JFrame {
     private final JButton nextButton = new JButton("Próximo");
     private final JButton telaAnterior = new JButton("Tela Principal");
     private int currentPage = 0;
-    private final int pageSize = 100;
+    private final int pageSize = 250;
     private final Vector<String> columnNames = new Vector<>();
     JButton insertButton = new JButton("Inserir");
     JButton editButton = new JButton("Editar");

@@ -29,8 +29,11 @@ public class CsvReader extends JFrame {
     private String[] headers;
     private String insertSql;
     private final int rowsPerPage = 1000;
+    private final JLabel statusLabel = new JLabel("Linhas inseridas: 0");
+    private String separator = ",";
+    private final JPanel contentPanel = new JPanel(new BorderLayout());
 
-    private String separator = ","; // adicionar isso como atributo da classe
+    private final String versao = "";
 
 
     public CsvReader() {
@@ -38,20 +41,48 @@ public class CsvReader extends JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setSize(800, 600);
         setLayout(new BorderLayout());
-        JButton loadButton = new JButton("Carregar CSV");
-        loadButton.addActionListener(e -> loadCsv());
-        add(loadButton, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
         add(headerYes, BorderLayout.SOUTH);
 
-        JButton viewDataButton = new JButton("Visualizar dados");
-        viewDataButton.addActionListener(e -> {
+        JPanel welcomePanel = new JPanel(new GridBagLayout());
+        JLabel titleLabel = new JLabel("CSV Processador");
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
+        welcomePanel.add(titleLabel);
+
+        contentPanel.add(welcomePanel, BorderLayout.CENTER);
+        add(contentPanel, BorderLayout.CENTER);
+
+        JMenuBar menuBar = new JMenuBar();
+        // cria um menu
+        JMenu menuArquivo = new JMenu("Opções");
+        JMenuItem menuItemCarregarCSV = new JMenuItem("Carregar CSV");
+        JMenuItem menuItemVisualizarDados = new JMenuItem("Visualizar Dados");
+        menuArquivo.add(menuItemCarregarCSV);
+        menuArquivo.add(menuItemVisualizarDados);
+        // Adiciona o menu à barra de menu
+        menuBar.add(menuArquivo);
+
+        // Define a barra de menu na janela
+        setJMenuBar(menuBar);
+
+        // Adiciona itens ao menu
+        menuArquivo.add(menuItemCarregarCSV);
+        menuArquivo.add(menuItemVisualizarDados);
+
+        // Adiciona o menu à barra de menu
+        menuBar.add(menuArquivo);
+
+        menuItemCarregarCSV.addActionListener(e -> loadCsv());
+        menuItemVisualizarDados.addActionListener(e -> {
             VisualizadorDados visualizadorDados = new VisualizadorDados();
             visualizadorDados.setVisible(true);
             this.setVisible(false);
-
         });
-        add(viewDataButton, BorderLayout.EAST);
+
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        statusPanel.add(statusLabel);
+        contentPanel.add(statusPanel, BorderLayout.SOUTH);
+
     }
 
     private void loadCsv() {
@@ -164,8 +195,12 @@ public class CsvReader extends JFrame {
                         conn.commit();
                         insertedRows.addAndGet(chunk.size());
 
-                        System.out.println("Inseridos: " + insertedRows.get());
+                        // adiciona linhas inseridas na tela inicial
+                        SwingUtilities.invokeLater(() -> {
+                            statusLabel.setText("Linhas inseridas: " + insertedRows.get());
+                        });
                     }
+
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
