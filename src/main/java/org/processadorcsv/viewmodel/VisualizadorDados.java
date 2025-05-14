@@ -15,6 +15,7 @@ import java.util.List;
 
 public class VisualizadorDados extends JFrame {
 
+    private final JLabel totalRegistrosLabel = new JLabel("Total de registros: 0");
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable table = new JTable(tableModel);
     private final JTextField filterField1 = new JTextField(21);
@@ -66,6 +67,8 @@ public class VisualizadorDados extends JFrame {
 
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JPanel bottomPanel2 = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        bottomPanel2.add(totalRegistrosLabel);
+
         bottomPanel2.add(telaAnterior);
 
         bottomPanel.add(previousButton);
@@ -169,6 +172,25 @@ public class VisualizadorDados extends JFrame {
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erro ao carregar dados.", "Erro", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            carregaQuantidadeDados();
+        }
+    }
+
+    private void carregaQuantidadeDados() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath())) {
+            Statement stmt = conn.createStatement();
+
+            String countSql = "SELECT COUNT(*) FROM csv_data " + buildWhereClause();
+            ResultSet countRs = stmt.executeQuery(countSql);
+            if (countRs.next()) {
+                int total = countRs.getInt(1);
+                totalRegistrosLabel.setText("Total de registros: " + total);
+            }
+            countRs.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            totalRegistrosLabel.setText("Erro ao contar registros.");
         }
     }
 
