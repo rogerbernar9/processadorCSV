@@ -33,7 +33,7 @@ public class CsvReader extends JFrame {
     private String separator = ",";
     private final JPanel contentPanel = new JPanel(new BorderLayout());
 
-    private final String versao = "1.3.0";
+    private final String versao = "1.4.0";
 
 
     public CsvReader() {
