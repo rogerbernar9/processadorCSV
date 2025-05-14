@@ -120,6 +120,7 @@ public class VisualizadorDados extends JFrame {
 
 
         loadColumnNames();
+        carregaQuantidadeDados();
     }
 
     private void loadColumnNames() {
