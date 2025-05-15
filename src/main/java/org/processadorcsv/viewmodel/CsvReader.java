@@ -42,7 +42,7 @@ public class CsvReader extends JFrame {
         setSize(800, 600);
         setLayout(new BorderLayout());
         add(new JScrollPane(table), BorderLayout.CENTER);
-        add(headerYes, BorderLayout.SOUTH);
+//        add(headerYes, BorderLayout.SOUTH);
 
         JPanel welcomePanel = new JPanel(new GridBagLayout());
         JLabel titleLabel = new JLabel("CSV Processador "+this.versao);

@@ -42,6 +42,9 @@ public class VisualizadorDados extends JFrame {
         setSize(1600, 600);
         setLayout(new BorderLayout());
 
+        JMenuBar menuBar = new JMenuBar();
+        JMenu menuArquivo = new JMenu("Opções");
+
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton loadButton = new JButton("Carregar dados");
         topPanel.add(new JLabel("Filtro 1 :"));
@@ -78,6 +81,14 @@ public class VisualizadorDados extends JFrame {
         bottomContainer.add(bottomPanel);
 
         add(bottomContainer, BorderLayout.SOUTH);
+
+        JMenuItem menuItemRenomearColumas = new JMenuItem("Renomear Colunas");
+        menuArquivo.add(menuItemRenomearColumas);
+        // Adiciona o menu à barra de menu
+        menuBar.add(menuArquivo);
+
+        // Define a barra de menu na Janela
+        setJMenuBar(menuBar);
 
         loadButton.addActionListener(e -> {
             currentPage = 0;
@@ -117,7 +128,13 @@ public class VisualizadorDados extends JFrame {
 
         topPanel.add(exportSqlButton);
         exportSqlButton.addActionListener(e -> abrirDialogExportarSQL());
-
+        menuItemRenomearColumas.addActionListener(e -> {
+            RenomearColunas dialog = new RenomearColunas(this, columnNames);
+            dialog.setVisible(true);
+            columnNames.clear();
+            loadColumnNames();
+            loadData();
+        });
 
         loadColumnNames();
         carregaQuantidadeDados();
