@@ -188,9 +188,7 @@ public class VisualizadorDados extends JFrame {
             ResultSet rsColumns = stmt.executeQuery("PRAGMA table_info(csv_data)");
             while (rsColumns.next()) {
                 String name = rsColumns.getString("name");
-                if (!name.equalsIgnoreCase("id")) {
                     columnNames.add(name);
-                }
             }
             rsColumns.close();
         } catch (SQLException e) {
@@ -346,6 +344,9 @@ public class VisualizadorDados extends JFrame {
         for (int i = 0; i < columnNames.size(); i++) {
             dialog.add(new JLabel(columnNames.get(i)));
             fields[i] = new JTextField((String) tableModel.getValueAt(rowIndex, i));
+            if (columnNames.get(i).equalsIgnoreCase("id")) {
+                fields[i].setEditable(false);
+            }
             dialog.add(fields[i]);
         }
         JButton salvar = new JButton("Salvar");
@@ -353,12 +354,31 @@ public class VisualizadorDados extends JFrame {
         salvar.addActionListener(e -> {
             try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
                 StringBuilder sql = new StringBuilder("UPDATE csv_data SET ");
-                for (String col : columnNames) sql.append(col).append(" = ?, ");
+                List<String> colunasAtualizaveis = new ArrayList<>();
+                for (String col : columnNames) {
+                    if (!col.equalsIgnoreCase("id")) {
+                        sql.append(col).append(" = ?, ");
+                        colunasAtualizaveis.add(col);
+                    }
+                }
                 sql.setLength(sql.length() - 2);
-                sql.append(" WHERE rowid = ?"); // rowid é suportado por SQLite se você não tiver id
+                sql.append(" WHERE id = ?");
                 PreparedStatement ps = conn.prepareStatement(sql.toString());
-                for (int i = 0; i < fields.length; i++) ps.setString(i + 1, fields[i].getText());
-                ps.setInt(columnNames.size() + 1, rowIndex + 1 + currentPage * pageSize);
+                int paramIndex = 1;
+                for (int i = 0; i < columnNames.size(); i++) {
+                    if (!columnNames.get(i).equalsIgnoreCase("id")) {
+                        ps.setString(paramIndex++, fields[i].getText());
+                    }
+                }
+
+                String idValue = null;
+                for (int i = 0; i < columnNames.size(); i++) {
+                    if (columnNames.get(i).equalsIgnoreCase("id")) {
+                        idValue = fields[i].getText();
+                        break;
+                    }
+                }
+                ps.setString(paramIndex, idValue);
                 ps.executeUpdate();
                 dialog.dispose();
                 loadData();
@@ -371,7 +391,6 @@ public class VisualizadorDados extends JFrame {
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
     }
-
     private void excluirRegistroSelecionado(int rowIndex) {
         int confirm = JOptionPane.showConfirmDialog(this, "Tem certeza que deseja excluir?", "Confirmar", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
@@ -614,18 +633,25 @@ public class VisualizadorDados extends JFrame {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
              Statement stmt = conn.createStatement()) {
             for (int row : linhas) {
-                Object id = table.getValueAt(row, 0); // Supondo que a coluna 'id' seja a 0
+                Object id = table.getValueAt(row, 0);
                 String sql = "UPDATE csv_data SET \"" + coluna + "\" = ? WHERE id = ?";
+                System.out.println("SQL gerado: " + sql);
+                System.out.println("Linha: " + row + ", ID: " + id + ", Novo valor: " + novoValor);
+
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     ps.setString(1, novoValor);
                     ps.setObject(2, id);
-                    ps.executeUpdate();
+                    int linhasAfetadas = ps.executeUpdate();
+                    System.out.println("Linhas afetadas: " + linhasAfetadas);
+
                 }
             }
             JOptionPane.showMessageDialog(this, "Dados atualizados com sucesso.");
         } catch (SQLException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erro ao atualizar dados: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            loadData();
         }
     }
 
