@@ -30,7 +30,6 @@ public class VisualizadorDados extends JFrame {
     JButton insertButton = new JButton("Inserir");
     JButton editButton = new JButton("Editar");
     JButton deleteButton = new JButton("Excluir");
-    JButton exportButton = new JButton("Exportar CSV");
     JButton exportSqlButton = new JButton("Exportar SQL");
     JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
     JCheckBox[] parseDateChecks = new JCheckBox[columnNames.size()];
@@ -44,6 +43,7 @@ public class VisualizadorDados extends JFrame {
 
         JMenuBar menuBar = new JMenuBar();
         JMenu menuArquivo = new JMenu("Opções");
+        JMenu menuExportacao = new JMenu("Exportação");
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton loadButton = new JButton("Carregar dados");
@@ -61,7 +61,6 @@ public class VisualizadorDados extends JFrame {
         topPanel.add(insertButton);
         topPanel.add(editButton);
         topPanel.add(deleteButton);
-        topPanel.add(exportButton);
 
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
@@ -83,9 +82,22 @@ public class VisualizadorDados extends JFrame {
         add(bottomContainer, BorderLayout.SOUTH);
 
         JMenuItem menuItemRenomearColumas = new JMenuItem("Renomear Colunas");
+        JMenuItem menuItemAdicionarColuna = new JMenuItem("Adicionar Nova Coluna");
+
+        JMenuItem menuItemExportarCSV = new JMenuItem("Exportar para CSV");
+        JMenuItem menuItemExportarSQL = new JMenuItem("Exportar para SQL insert");
+        JMenuItem menuItemEdicaoMassa = new JMenuItem("Edição em Massa");
+
         menuArquivo.add(menuItemRenomearColumas);
+        menuArquivo.add(menuItemAdicionarColuna);
+        menuArquivo.add(menuItemEdicaoMassa);
+
+        menuExportacao.add(menuItemExportarCSV);
+        menuExportacao.add(menuItemExportarSQL);
+
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
+        menuBar.add(menuExportacao);
 
         // Define a barra de menu na Janela
         setJMenuBar(menuBar);
@@ -119,21 +131,51 @@ public class VisualizadorDados extends JFrame {
             if (selectedRow >= 0) abrirDialogDeEdicao(selectedRow);
             else JOptionPane.showMessageDialog(this, "Selecione uma linha para editar.");
         });
+
         deleteButton.addActionListener(e -> {
             int selectedRow = table.getSelectedRow();
             if (selectedRow >= 0) excluirRegistroSelecionado(selectedRow);
             else JOptionPane.showMessageDialog(this, "Selecione uma linha para excluir.");
         });
-        exportButton.addActionListener(e -> exportarParaCSV());
 
-        topPanel.add(exportSqlButton);
-        exportSqlButton.addActionListener(e -> abrirDialogExportarSQL());
+        menuItemExportarCSV.addActionListener(e -> exportarParaCSV());
+
+        menuItemExportarSQL.addActionListener(e -> abrirDialogExportarSQL());
         menuItemRenomearColumas.addActionListener(e -> {
             RenomearColunas dialog = new RenomearColunas(this, columnNames);
             dialog.setVisible(true);
             columnNames.clear();
             loadColumnNames();
             loadData();
+        });
+
+        menuItemAdicionarColuna.addActionListener(e -> {
+            AdicionarColunaDialog dialog = new AdicionarColunaDialog(this);
+            dialog.setVisible(true);
+            if (dialog.isColunaCriada()) {
+                columnNames.clear();
+                loadColumnNames();
+                loadData();
+            }
+        });
+
+        menuItemEdicaoMassa.addActionListener(e -> {
+            int[] linhasSelecionadas = table.getSelectedRows();
+            if (linhasSelecionadas.length == 0) {
+                JOptionPane.showMessageDialog(this, "Selecione ao menos uma linha para editar.");
+                return;
+            }
+            EdicaoEmMassaDialog dialog = new EdicaoEmMassaDialog(this, columnNames);
+            dialog.setVisible(true);
+            if (dialog.isConfirmado()) {
+                String coluna = dialog.getColunaSelecionada();
+                String novoValor = dialog.getNovoValor();
+                int colunaIndex = columnNames.indexOf(coluna);
+                for (int row : linhasSelecionadas) {
+                    tableModel.setValueAt(novoValor, row, colunaIndex);
+                }
+                atualizarDadosNoBancoEmMassa(linhasSelecionadas, coluna, novoValor);
+            }
         });
 
         loadColumnNames();
@@ -565,6 +607,25 @@ public class VisualizadorDados extends JFrame {
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erro ao exportar para SQL.");
+        }
+    }
+
+    private void atualizarDadosNoBancoEmMassa(int[] linhas, String coluna, String novoValor) {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+             Statement stmt = conn.createStatement()) {
+            for (int row : linhas) {
+                Object id = table.getValueAt(row, 0); // Supondo que a coluna 'id' seja a 0
+                String sql = "UPDATE csv_data SET \"" + coluna + "\" = ? WHERE id = ?";
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, novoValor);
+                    ps.setObject(2, id);
+                    ps.executeUpdate();
+                }
+            }
+            JOptionPane.showMessageDialog(this, "Dados atualizados com sucesso.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao atualizar dados: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         }
     }
 
