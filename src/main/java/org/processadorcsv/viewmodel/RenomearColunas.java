@@ -25,6 +25,9 @@ public class RenomearColunas extends JDialog {
             camposPanel.add(new JLabel("Coluna: " + nomeColuna));
             JTextField campo = new JTextField(nomeColuna);
             novosNomesCampos.add(campo);
+            if(nomeColuna.equalsIgnoreCase("id")) {
+                campo.setEditable(false);
+            }
             camposPanel.add(campo);
         }
         JButton aplicarButton = new JButton("Aplicar Renomeações");

@@ -1,17 +1,22 @@
 package org.processadorcsv.viewmodel;
 
 import org.processadorcsv.jdbd.db.DatabaseUtil;
+import org.processadorcsv.viewmodel.util.CSVExporterWorker;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.File;
 import java.io.FileWriter;
 import java.sql.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.Vector;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 public class VisualizadorDados extends JFrame {
 
@@ -30,7 +35,6 @@ public class VisualizadorDados extends JFrame {
     JButton insertButton = new JButton("Inserir");
     JButton editButton = new JButton("Editar");
     JButton deleteButton = new JButton("Excluir");
-    JButton exportButton = new JButton("Exportar CSV");
     JButton exportSqlButton = new JButton("Exportar SQL");
     JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
     JCheckBox[] parseDateChecks = new JCheckBox[columnNames.size()];
@@ -44,6 +48,7 @@ public class VisualizadorDados extends JFrame {
 
         JMenuBar menuBar = new JMenuBar();
         JMenu menuArquivo = new JMenu("Opções");
+        JMenu menuExportacao = new JMenu("Exportação");
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton loadButton = new JButton("Carregar dados");
@@ -61,7 +66,6 @@ public class VisualizadorDados extends JFrame {
         topPanel.add(insertButton);
         topPanel.add(editButton);
         topPanel.add(deleteButton);
-        topPanel.add(exportButton);
 
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
@@ -83,9 +87,22 @@ public class VisualizadorDados extends JFrame {
         add(bottomContainer, BorderLayout.SOUTH);
 
         JMenuItem menuItemRenomearColumas = new JMenuItem("Renomear Colunas");
+        JMenuItem menuItemAdicionarColuna = new JMenuItem("Adicionar Nova Coluna");
+
+        JMenuItem menuItemExportarCSV = new JMenuItem("Exportar para CSV");
+        JMenuItem menuItemExportarSQL = new JMenuItem("Exportar para SQL insert");
+        JMenuItem menuItemEdicaoMassa = new JMenuItem("Edição em Massa");
+
         menuArquivo.add(menuItemRenomearColumas);
+        menuArquivo.add(menuItemAdicionarColuna);
+        menuArquivo.add(menuItemEdicaoMassa);
+
+        menuExportacao.add(menuItemExportarCSV);
+        menuExportacao.add(menuItemExportarSQL);
+
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
+        menuBar.add(menuExportacao);
 
         // Define a barra de menu na Janela
         setJMenuBar(menuBar);
@@ -119,21 +136,55 @@ public class VisualizadorDados extends JFrame {
             if (selectedRow >= 0) abrirDialogDeEdicao(selectedRow);
             else JOptionPane.showMessageDialog(this, "Selecione uma linha para editar.");
         });
+
         deleteButton.addActionListener(e -> {
             int selectedRow = table.getSelectedRow();
             if (selectedRow >= 0) excluirRegistroSelecionado(selectedRow);
             else JOptionPane.showMessageDialog(this, "Selecione uma linha para excluir.");
         });
-        exportButton.addActionListener(e -> exportarParaCSV());
 
-        topPanel.add(exportSqlButton);
-        exportSqlButton.addActionListener(e -> abrirDialogExportarSQL());
+        menuItemExportarCSV.addActionListener(e -> exportarParaCSV());
+
+        menuItemExportarSQL.addActionListener(e -> {
+            ExportarSQLDialog dialog = new ExportarSQLDialog(this);
+            dialog.setVisible(true);
+        });
+
         menuItemRenomearColumas.addActionListener(e -> {
             RenomearColunas dialog = new RenomearColunas(this, columnNames);
             dialog.setVisible(true);
             columnNames.clear();
             loadColumnNames();
             loadData();
+        });
+
+        menuItemAdicionarColuna.addActionListener(e -> {
+            AdicionarColunaDialog dialog = new AdicionarColunaDialog(this);
+            dialog.setVisible(true);
+            if (dialog.isColunaCriada()) {
+                columnNames.clear();
+                loadColumnNames();
+                loadData();
+            }
+        });
+
+        menuItemEdicaoMassa.addActionListener(e -> {
+            int[] linhasSelecionadas = table.getSelectedRows();
+            if (linhasSelecionadas.length == 0) {
+                JOptionPane.showMessageDialog(this, "Selecione ao menos uma linha para editar.");
+                return;
+            }
+            EdicaoEmMassaDialog dialog = new EdicaoEmMassaDialog(this, columnNames);
+            dialog.setVisible(true);
+            if (dialog.isConfirmado()) {
+                String coluna = dialog.getColunaSelecionada();
+                String novoValor = dialog.getNovoValor();
+                int colunaIndex = columnNames.indexOf(coluna);
+                for (int row : linhasSelecionadas) {
+                    tableModel.setValueAt(novoValor, row, colunaIndex);
+                }
+                atualizarDadosNoBancoEmMassa(linhasSelecionadas, coluna, novoValor);
+            }
         });
 
         loadColumnNames();
@@ -146,9 +197,7 @@ public class VisualizadorDados extends JFrame {
             ResultSet rsColumns = stmt.executeQuery("PRAGMA table_info(csv_data)");
             while (rsColumns.next()) {
                 String name = rsColumns.getString("name");
-                if (!name.equalsIgnoreCase("id")) {
                     columnNames.add(name);
-                }
             }
             rsColumns.close();
         } catch (SQLException e) {
@@ -304,6 +353,9 @@ public class VisualizadorDados extends JFrame {
         for (int i = 0; i < columnNames.size(); i++) {
             dialog.add(new JLabel(columnNames.get(i)));
             fields[i] = new JTextField((String) tableModel.getValueAt(rowIndex, i));
+            if (columnNames.get(i).equalsIgnoreCase("id")) {
+                fields[i].setEditable(false);
+            }
             dialog.add(fields[i]);
         }
         JButton salvar = new JButton("Salvar");
@@ -311,12 +363,31 @@ public class VisualizadorDados extends JFrame {
         salvar.addActionListener(e -> {
             try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
                 StringBuilder sql = new StringBuilder("UPDATE csv_data SET ");
-                for (String col : columnNames) sql.append(col).append(" = ?, ");
+                List<String> colunasAtualizaveis = new ArrayList<>();
+                for (String col : columnNames) {
+                    if (!col.equalsIgnoreCase("id")) {
+                        sql.append(col).append(" = ?, ");
+                        colunasAtualizaveis.add(col);
+                    }
+                }
                 sql.setLength(sql.length() - 2);
-                sql.append(" WHERE rowid = ?"); // rowid é suportado por SQLite se você não tiver id
+                sql.append(" WHERE id = ?");
                 PreparedStatement ps = conn.prepareStatement(sql.toString());
-                for (int i = 0; i < fields.length; i++) ps.setString(i + 1, fields[i].getText());
-                ps.setInt(columnNames.size() + 1, rowIndex + 1 + currentPage * pageSize);
+                int paramIndex = 1;
+                for (int i = 0; i < columnNames.size(); i++) {
+                    if (!columnNames.get(i).equalsIgnoreCase("id")) {
+                        ps.setString(paramIndex++, fields[i].getText());
+                    }
+                }
+
+                String idValue = null;
+                for (int i = 0; i < columnNames.size(); i++) {
+                    if (columnNames.get(i).equalsIgnoreCase("id")) {
+                        idValue = fields[i].getText();
+                        break;
+                    }
+                }
+                ps.setString(paramIndex, idValue);
                 ps.executeUpdate();
                 dialog.dispose();
                 loadData();
@@ -329,7 +400,6 @@ public class VisualizadorDados extends JFrame {
         dialog.setLocationRelativeTo(this);
         dialog.setVisible(true);
     }
-
     private void excluirRegistroSelecionado(int rowIndex) {
         int confirm = JOptionPane.showConfirmDialog(this, "Tem certeza que deseja excluir?", "Confirmar", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
@@ -346,191 +416,49 @@ public class VisualizadorDados extends JFrame {
     }
 
     private void exportarParaCSV() {
-        JFileChooser fileChooser = new JFileChooser();
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
-                 Statement stmt = conn.createStatement();
-                 FileWriter writer = new FileWriter(fileChooser.getSelectedFile())) {
-
-                if (columnNames.isEmpty()) {
-                    loadColumnNames();
-                }
-
-                /**
-                 * ignora exportação dos nomes das colunas
-                for (int i = 0; i < columnNames.size(); i++) {
-                    writer.write(columnNames.get(i));
-                    if (i < columnNames.size() - 1) writer.write(",");
-                }
+        ExportarCSVDialog dialog = new ExportarCSVDialog(this, new ArrayList<>(columnNames));
+        dialog.setVisible(true);
+        if (!dialog.isConfirmado()) return;
+        boolean incluirCabecalho = dialog.isIncluirCabecalho();
+        File file = dialog.getArquivoSelecionado();
+        List<String> colunasSelecionadas = dialog.getColunasSelecionadas();
+        Set<String> colunasParaInt = dialog.getColunasParaInteiro();
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+             Statement stmt = conn.createStatement();
+             FileWriter writer = new FileWriter(file)) {
+            if (incluirCabecalho) {
+                writer.write(String.join(",", colunasSelecionadas));
                 writer.write("\n");
-                 **/
-
-                String sql = "SELECT " + String.join(", ", columnNames) + " FROM csv_data";
-                ResultSet rs = stmt.executeQuery(sql);
-
-                while (rs.next()) {
-                    for (int i = 0; i < columnNames.size(); i++) {
-                        writer.write(rs.getString(columnNames.get(i)));
-                        if (i < columnNames.size() - 1) writer.write(",");
-                    }
-                    writer.write("\n");
-                }
-                JOptionPane.showMessageDialog(this, "Exportado com sucesso.");
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Erro ao exportar CSV.");
             }
+            String sql = "SELECT " + String.join(", ", colunasSelecionadas) + " FROM csv_data";
+            ResultSet rs = stmt.executeQuery(sql);
+            BlockingQueue<List<Object>> queue = new ArrayBlockingQueue<>(500);
+            Thread worker = new Thread(new CSVExporterWorker(queue, colunasSelecionadas, writer));
+            worker.start();
+            while (rs.next()) {
+                List<Object> row = new ArrayList<>();
+                for (String coluna : colunasSelecionadas) {
+                    Object valor = rs.getObject(coluna);
+                    if (colunasParaInt.contains(coluna)) {
+                        try {
+                            valor = Integer.parseInt(String.valueOf(valor).replaceAll("\\D+", ""));
+                        } catch (NumberFormatException ex) {
+                            valor = 0;
+                        }
+                    }
+                    row.add(valor == null ? "" : valor);
+                }
+                queue.put(row);
+            }
+            queue.put(new ArrayList<>());
+            worker.join();
+            JOptionPane.showMessageDialog(this, "Exportado com sucesso.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao exportar CSV.");
         }
     }
 
-    private void abrirDialogExportarSQL() {
-        JDialog dialog = new JDialog(this, "Exportar SQL com personalização", true);
-        dialog.setLayout(new BorderLayout());
-        JPanel mainPanel = new JPanel(new BorderLayout());
-        JPanel tableNamePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        tableNamePanel.add(new JLabel("Nome da Tabela:"));
-        JTextField tableNameField = new JTextField("csv_data", 20);
-        tableNamePanel.add(tableNameField);
-        // Componentes globais para o painel dinâmico
-        JPanel customPanel = new JPanel(new GridLayout(0, 6, 5, 5));
-        JScrollPane scrollPane = new JScrollPane(customPanel);
-        // Declarar arrays com tamanho máximo (ajustável se preferir usar listas)
-        final int MAX_COLUMNS = 100;
-        JCheckBox[] columnChecks = new JCheckBox[MAX_COLUMNS];
-        JTextField[] renamedFields = new JTextField[MAX_COLUMNS];
-        JComboBox<String>[] typeSelectors = new JComboBox[MAX_COLUMNS];
-        JCheckBox[] sanitizeChecks = new JCheckBox[MAX_COLUMNS];
-        JCheckBox[] parseDateChecks = new JCheckBox[MAX_COLUMNS];
-        String[] tiposDados = {"VARCHAR", "INTEGER", "DATE", "BOOLEAN", "DOUBLE"};
-        // Listas para armazenar os dados e nomes de colunas do banco
-        List<String> columnNames = new ArrayList<>();
-        List<List<Object>> dadosTabela = new ArrayList<>();
-        // Botão para carregar colunas do banco de dados
-        JButton carregarColunasButton = new JButton("Carregar Colunas");
-        carregarColunasButton.addActionListener(ev -> {
-            columnNames.clear();
-            dadosTabela.clear();
-            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
-                 Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableNameField.getText().trim())) {
-                ResultSetMetaData meta = rs.getMetaData();
-                for (int i = 1; i <= meta.getColumnCount(); i++) {
-                    columnNames.add(meta.getColumnName(i));
-                }
-                while (rs.next()) {
-                    List<Object> linha = new ArrayList<>();
-                    for (int i = 1; i <= columnNames.size(); i++) {
-                        linha.add(rs.getObject(i));
-                    }
-                    dadosTabela.add(linha);
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(dialog, "Erro ao carregar dados do banco.");
-                return;
-            }
-            customPanel.removeAll();
-            for (int i = 0; i < columnNames.size(); i++) {
-                String originalName = columnNames.get(i);
-                columnChecks[i] = new JCheckBox();
-                columnChecks[i].setSelected(true);
-                renamedFields[i] = new JTextField(originalName);
-                typeSelectors[i] = new JComboBox<>(tiposDados);
-                sanitizeChecks[i] = new JCheckBox("Limpar especiais");
-                parseDateChecks[i] = new JCheckBox("Converter p/ Data");
-                customPanel.add(columnChecks[i]);
-                customPanel.add(new JLabel("Coluna: " + originalName));
-                customPanel.add(renamedFields[i]);
-                customPanel.add(typeSelectors[i]);
-                customPanel.add(sanitizeChecks[i]);
-                customPanel.add(parseDateChecks[i]);
-            }
-            customPanel.revalidate();
-            customPanel.repaint();
-        });
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.add(tableNamePanel, BorderLayout.WEST);
-        topPanel.add(carregarColunasButton, BorderLayout.EAST);
-        JButton exportarButton = new JButton("Exportar SQL");
-        exportarButton.addActionListener(e -> {
-            try {
-                String tableName = tableNameField.getText().trim();
-                if (tableName.isEmpty()) {
-                    JOptionPane.showMessageDialog(dialog, "Informe um nome válido para a tabela.");
-                    return;
-                }
-                StringBuilder sb = new StringBuilder();
-                for (List<Object> row : dadosTabela) {
-                    sb.append("INSERT INTO ").append(tableName).append(" (");
-                    List<Integer> selectedIndexes = new ArrayList<>();
-                    for (int i = 0; i < columnNames.size(); i++) {
-                        if (columnChecks[i] != null && columnChecks[i].isSelected()) {
-                            selectedIndexes.add(i);
-                            sb.append(renamedFields[i].getText());
-                            if (selectedIndexes.size() < countSelected(columnChecks)) {
-                                sb.append(", ");
-                            }
-                        }
-                    }
-                    sb.append(") VALUES (");
-                    for (int i = 0; i < selectedIndexes.size(); i++) {
-                        int col = selectedIndexes.get(i);
-                        String tipo = (String) typeSelectors[col].getSelectedItem();
-                        Object valor = row.get(col);
-                        String valorFormatado;
-                        if (valor == null) {
-                            valorFormatado = "NULL";
-                        } else if ("INTEGER".equals(tipo) || "DOUBLE".equals(tipo)) {
-                            valorFormatado = valor.toString();
-                        } else if ("BOOLEAN".equals(tipo)) {
-                            valorFormatado = Boolean.parseBoolean(valor.toString()) ? "TRUE" : "FALSE";
-                        } else {
-                            String texto = valor.toString();
-                            if (sanitizeChecks[col].isSelected()) {
-                                texto = texto.replaceAll("[.,\\-*]", "");
-                            }
-                            if ("DATE".equals(tipo) && parseDateChecks[col].isSelected()) {
-                                try {
-                                    SimpleDateFormat inputFormat = new SimpleDateFormat("dd/MM/yyyy");
-                                    inputFormat.setLenient(false);
-                                    SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy-MM-dd");
-
-                                    java.util.Date data = inputFormat.parse(texto);
-                                    texto = outputFormat.format(data);
-                                } catch (ParseException ex) {
-                                    texto = "1970-01-01";
-                                }
-                            }
-                            valorFormatado = "'" + texto.replace("'", "''") + "'";
-                        }
-                        sb.append(valorFormatado);
-                        if (i < selectedIndexes.size() - 1) sb.append(", ");
-                    }
-                    sb.append(");\n");
-                }
-                JFileChooser fileChooser = new JFileChooser();
-                fileChooser.setDialogTitle("Salvar como SQL");
-                int userSelection = fileChooser.showSaveDialog(this);
-                if (userSelection == JFileChooser.APPROVE_OPTION) {
-                    FileWriter writer = new FileWriter(fileChooser.getSelectedFile());
-                    writer.write(sb.toString());
-                    writer.close();
-                    JOptionPane.showMessageDialog(this, "Arquivo SQL exportado com sucesso!");
-                }
-                dialog.dispose();
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Erro ao exportar SQL.");
-            }
-        });
-        mainPanel.add(topPanel, BorderLayout.NORTH);
-        mainPanel.add(scrollPane, BorderLayout.CENTER);
-        mainPanel.add(exportarButton, BorderLayout.SOUTH);
-        dialog.add(mainPanel);
-        dialog.setSize(900, 500);
-        dialog.setLocationRelativeTo(this);
-        dialog.setVisible(true);
-    }
     private int countSelected(JCheckBox[] boxes) {
         int count = 0;
         for (JCheckBox box : boxes) {
@@ -538,6 +466,7 @@ public class VisualizadorDados extends JFrame {
         }
         return count;
     }
+
     private void exportarDadosComoInsertSQL(String nomeTabela, String[] tipos) {
         JFileChooser fileChooser = new JFileChooser();
         fileChooser.setDialogTitle("Salvar como SQL");
@@ -565,6 +494,32 @@ public class VisualizadorDados extends JFrame {
         } catch (Exception ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(this, "Erro ao exportar para SQL.");
+        }
+    }
+
+    private void atualizarDadosNoBancoEmMassa(int[] linhas, String coluna, String novoValor) {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+             Statement stmt = conn.createStatement()) {
+            for (int row : linhas) {
+                Object id = table.getValueAt(row, 0);
+                String sql = "UPDATE csv_data SET \"" + coluna + "\" = ? WHERE id = ?";
+                System.out.println("SQL gerado: " + sql);
+                System.out.println("Linha: " + row + ", ID: " + id + ", Novo valor: " + novoValor);
+
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, novoValor);
+                    ps.setObject(2, id);
+                    int linhasAfetadas = ps.executeUpdate();
+                    System.out.println("Linhas afetadas: " + linhasAfetadas);
+
+                }
+            }
+            JOptionPane.showMessageDialog(this, "Dados atualizados com sucesso.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao atualizar dados: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            loadData();
         }
     }
 

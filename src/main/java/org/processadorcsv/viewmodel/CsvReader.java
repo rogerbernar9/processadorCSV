@@ -33,7 +33,7 @@ public class CsvReader extends JFrame {
     private String separator = ",";
     private final JPanel contentPanel = new JPanel(new BorderLayout());
 
-    private final String versao = "1.4.0";
+    private final String versao = "1.6.0";
 
 
     public CsvReader() {
@@ -45,7 +45,7 @@ public class CsvReader extends JFrame {
 //        add(headerYes, BorderLayout.SOUTH);
 
         JPanel welcomePanel = new JPanel(new GridBagLayout());
-        JLabel titleLabel = new JLabel("CSV Processador "+this.versao);
+        JLabel titleLabel = new JLabel("CSV Processador");
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
         welcomePanel.add(titleLabel);
 
