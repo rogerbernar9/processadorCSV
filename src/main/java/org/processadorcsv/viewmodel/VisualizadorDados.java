@@ -1,17 +1,22 @@
 package org.processadorcsv.viewmodel;
 
 import org.processadorcsv.jdbd.db.DatabaseUtil;
+import org.processadorcsv.viewmodel.util.CSVExporterWorker;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.File;
 import java.io.FileWriter;
 import java.sql.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.Vector;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 public class VisualizadorDados extends JFrame {
 
@@ -411,191 +416,48 @@ public class VisualizadorDados extends JFrame {
     }
 
     private void exportarParaCSV() {
-        JFileChooser fileChooser = new JFileChooser();
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
-                 Statement stmt = conn.createStatement();
-                 FileWriter writer = new FileWriter(fileChooser.getSelectedFile())) {
-
-                if (columnNames.isEmpty()) {
-                    loadColumnNames();
-                }
-
-                /**
-                 * ignora exportação dos nomes das colunas
-                for (int i = 0; i < columnNames.size(); i++) {
-                    writer.write(columnNames.get(i));
-                    if (i < columnNames.size() - 1) writer.write(",");
-                }
+        ExportarCSVDialog dialog = new ExportarCSVDialog(this, new ArrayList<>(columnNames));
+        dialog.setVisible(true);
+        if (!dialog.isConfirmado()) return;
+        boolean incluirCabecalho = dialog.isIncluirCabecalho();
+        File file = dialog.getArquivoSelecionado();
+        List<String> colunasSelecionadas = dialog.getColunasSelecionadas();
+        Set<String> colunasParaInt = dialog.getColunasParaInteiro();
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+             Statement stmt = conn.createStatement();
+             FileWriter writer = new FileWriter(file)) {
+            if (incluirCabecalho) {
+                writer.write(String.join(",", colunasSelecionadas));
                 writer.write("\n");
-                 **/
-
-                String sql = "SELECT " + String.join(", ", columnNames) + " FROM csv_data";
-                ResultSet rs = stmt.executeQuery(sql);
-
-                while (rs.next()) {
-                    for (int i = 0; i < columnNames.size(); i++) {
-                        writer.write(rs.getString(columnNames.get(i)));
-                        if (i < columnNames.size() - 1) writer.write(",");
-                    }
-                    writer.write("\n");
-                }
-                JOptionPane.showMessageDialog(this, "Exportado com sucesso.");
-            } catch (Exception ex) {
-                ex.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Erro ao exportar CSV.");
             }
+            String sql = "SELECT " + String.join(", ", colunasSelecionadas) + " FROM csv_data";
+            ResultSet rs = stmt.executeQuery(sql);
+            BlockingQueue<List<Object>> queue = new ArrayBlockingQueue<>(500);
+            Thread worker = new Thread(new CSVExporterWorker(queue, colunasSelecionadas, writer));
+            worker.start();
+            while (rs.next()) {
+                List<Object> row = new ArrayList<>();
+                for (String coluna : colunasSelecionadas) {
+                    Object valor = rs.getObject(coluna);
+                    if (colunasParaInt.contains(coluna)) {
+                        try {
+                            valor = Integer.parseInt(String.valueOf(valor).replaceAll("\\D+", ""));
+                        } catch (NumberFormatException ex) {
+                            valor = 0;
+                        }
+                    }
+                    row.add(valor == null ? "" : valor);
+                }
+                queue.put(row);
+            }
+            queue.put(new ArrayList<>());
+            worker.join();
+            JOptionPane.showMessageDialog(this, "Exportado com sucesso.");
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao exportar CSV.");
         }
     }
-
-//    private void abrirDialogExportarSQL() {
-//        JDialog dialog = new JDialog(this, "Exportar SQL com personalização", true);
-//        dialog.setLayout(new BorderLayout());
-//        JPanel mainPanel = new JPanel(new BorderLayout());
-//        JPanel tableNamePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-//        tableNamePanel.add(new JLabel("Nome da Tabela:"));
-//        JTextField tableNameField = new JTextField("csv_data", 20);
-//        tableNamePanel.add(tableNameField);
-//        // Componentes globais para o painel dinâmico
-//        JPanel customPanel = new JPanel(new GridLayout(0, 6, 5, 5));
-//        JScrollPane scrollPane = new JScrollPane(customPanel);
-//        // Declarar arrays com tamanho máximo (ajustável se preferir usar listas)
-//        final int MAX_COLUMNS = 100;
-//        JCheckBox[] columnChecks = new JCheckBox[MAX_COLUMNS];
-//        JTextField[] renamedFields = new JTextField[MAX_COLUMNS];
-//        JComboBox<String>[] typeSelectors = new JComboBox[MAX_COLUMNS];
-//        JCheckBox[] sanitizeChecks = new JCheckBox[MAX_COLUMNS];
-//        JCheckBox[] parseDateChecks = new JCheckBox[MAX_COLUMNS];
-//        String[] tiposDados = {"VARCHAR", "INTEGER", "DATE", "BOOLEAN", "DOUBLE"};
-//        // Listas para armazenar os dados e nomes de colunas do banco
-//        List<String> columnNames = new ArrayList<>();
-//        List<List<Object>> dadosTabela = new ArrayList<>();
-//        // Botão para carregar colunas do banco de dados
-//        JButton carregarColunasButton = new JButton("Carregar Colunas");
-//        carregarColunasButton.addActionListener(ev -> {
-//            columnNames.clear();
-//            dadosTabela.clear();
-//            try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
-//                 Statement stmt = conn.createStatement();
-//                 ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableNameField.getText().trim())) {
-//                ResultSetMetaData meta = rs.getMetaData();
-//                for (int i = 1; i <= meta.getColumnCount(); i++) {
-//                    columnNames.add(meta.getColumnName(i));
-//                }
-//                while (rs.next()) {
-//                    List<Object> linha = new ArrayList<>();
-//                    for (int i = 1; i <= columnNames.size(); i++) {
-//                        linha.add(rs.getObject(i));
-//                    }
-//                    dadosTabela.add(linha);
-//                }
-//            } catch (Exception e) {
-//                e.printStackTrace();
-//                JOptionPane.showMessageDialog(dialog, "Erro ao carregar dados do banco.");
-//                return;
-//            }
-//            customPanel.removeAll();
-//            for (int i = 0; i < columnNames.size(); i++) {
-//                String originalName = columnNames.get(i);
-//                columnChecks[i] = new JCheckBox();
-//                columnChecks[i].setSelected(true);
-//                renamedFields[i] = new JTextField(originalName);
-//                typeSelectors[i] = new JComboBox<>(tiposDados);
-//                sanitizeChecks[i] = new JCheckBox("Limpar especiais");
-//                parseDateChecks[i] = new JCheckBox("Converter p/ Data");
-//                customPanel.add(columnChecks[i]);
-//                customPanel.add(new JLabel("Coluna: " + originalName));
-//                customPanel.add(renamedFields[i]);
-//                customPanel.add(typeSelectors[i]);
-//                customPanel.add(sanitizeChecks[i]);
-//                customPanel.add(parseDateChecks[i]);
-//            }
-//            customPanel.revalidate();
-//            customPanel.repaint();
-//        });
-//        JPanel topPanel = new JPanel(new BorderLayout());
-//        topPanel.add(tableNamePanel, BorderLayout.WEST);
-//        topPanel.add(carregarColunasButton, BorderLayout.EAST);
-//        JButton exportarButton = new JButton("Exportar SQL");
-//        exportarButton.addActionListener(e -> {
-//            try {
-//                String tableName = tableNameField.getText().trim();
-//                if (tableName.isEmpty()) {
-//                    JOptionPane.showMessageDialog(dialog, "Informe um nome válido para a tabela.");
-//                    return;
-//                }
-//                StringBuilder sb = new StringBuilder();
-//                for (List<Object> row : dadosTabela) {
-//                    sb.append("INSERT INTO ").append(tableName).append(" (");
-//                    List<Integer> selectedIndexes = new ArrayList<>();
-//                    for (int i = 0; i < columnNames.size(); i++) {
-//                        if (columnChecks[i] != null && columnChecks[i].isSelected()) {
-//                            selectedIndexes.add(i);
-//                            sb.append(renamedFields[i].getText());
-//                            if (selectedIndexes.size() < countSelected(columnChecks)) {
-//                                sb.append(", ");
-//                            }
-//                        }
-//                    }
-//                    sb.append(") VALUES (");
-//                    for (int i = 0; i < selectedIndexes.size(); i++) {
-//                        int col = selectedIndexes.get(i);
-//                        String tipo = (String) typeSelectors[col].getSelectedItem();
-//                        Object valor = row.get(col);
-//                        String valorFormatado;
-//                        if (valor == null) {
-//                            valorFormatado = "NULL";
-//                        } else if ("INTEGER".equals(tipo) || "DOUBLE".equals(tipo)) {
-//                            valorFormatado = valor.toString();
-//                        } else if ("BOOLEAN".equals(tipo)) {
-//                            valorFormatado = Boolean.parseBoolean(valor.toString()) ? "TRUE" : "FALSE";
-//                        } else {
-//                            String texto = valor.toString();
-//                            if (sanitizeChecks[col].isSelected()) {
-//                                texto = texto.replaceAll("[.,\\-*]", "");
-//                            }
-//                            if ("DATE".equals(tipo) && parseDateChecks[col].isSelected()) {
-//                                try {
-//                                    SimpleDateFormat inputFormat = new SimpleDateFormat("dd/MM/yyyy");
-//                                    inputFormat.setLenient(false);
-//                                    SimpleDateFormat outputFormat = new SimpleDateFormat("yyyy-MM-dd");
-//
-//                                    java.util.Date data = inputFormat.parse(texto);
-//                                    texto = outputFormat.format(data);
-//                                } catch (ParseException ex) {
-//                                    texto = "1970-01-01";
-//                                }
-//                            }
-//                            valorFormatado = "'" + texto.replace("'", "''") + "'";
-//                        }
-//                        sb.append(valorFormatado);
-//                        if (i < selectedIndexes.size() - 1) sb.append(", ");
-//                    }
-//                    sb.append(");\n");
-//                }
-//                JFileChooser fileChooser = new JFileChooser();
-//                fileChooser.setDialogTitle("Salvar como SQL");
-//                int userSelection = fileChooser.showSaveDialog(this);
-//                if (userSelection == JFileChooser.APPROVE_OPTION) {
-//                    FileWriter writer = new FileWriter(fileChooser.getSelectedFile());
-//                    writer.write(sb.toString());
-//                    writer.close();
-//                    JOptionPane.showMessageDialog(this, "Arquivo SQL exportado com sucesso!");
-//                }
-//                dialog.dispose();
-//            } catch (Exception ex) {
-//                ex.printStackTrace();
-//                JOptionPane.showMessageDialog(this, "Erro ao exportar SQL.");
-//            }
-//        });
-//        mainPanel.add(topPanel, BorderLayout.NORTH);
-//        mainPanel.add(scrollPane, BorderLayout.CENTER);
-//        mainPanel.add(exportarButton, BorderLayout.SOUTH);
-//        dialog.add(mainPanel);
-//        dialog.setSize(900, 500);
-//        dialog.setLocationRelativeTo(this);
-//        dialog.setVisible(true);
-//    }
 
     private int countSelected(JCheckBox[] boxes) {
         int count = 0;

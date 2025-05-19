@@ -87,12 +87,15 @@ public class ExportarSQLDialog extends JDialog {
     private void exportarSQL() {
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
              Statement stmt = conn.createStatement()) {
-            String tableName = tableNameField.getText().trim();
-            if (tableName.isEmpty()) {
+
+            String nomeRealTabela = "csv_data";
+            String nomeExportadoTabela = tableNameField.getText().trim();
+
+            if (nomeExportadoTabela.isEmpty()) {
                 JOptionPane.showMessageDialog(this, "Informe um nome válido para a tabela.");
                 return;
             }
-            ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName);
+            ResultSet rs = stmt.executeQuery("SELECT * FROM " + nomeRealTabela);
             JFileChooser fileChooser = new JFileChooser();
             fileChooser.setDialogTitle("Salvar como SQL");
             int userSelection = fileChooser.showSaveDialog(this);
@@ -106,7 +109,7 @@ public class ExportarSQLDialog extends JDialog {
                 }
                 while (rs.next()) {
                     StringBuilder sb = new StringBuilder();
-                    sb.append("INSERT INTO ").append(tableName).append(" (");
+                    sb.append("INSERT INTO ").append(nomeExportadoTabela).append(" (");
                     for (int i = 0; i < selectedIndexes.size(); i++) {
                         sb.append(renamedFields[selectedIndexes.get(i)].getText());
                         if (i < selectedIndexes.size() - 1) sb.append(", ");
