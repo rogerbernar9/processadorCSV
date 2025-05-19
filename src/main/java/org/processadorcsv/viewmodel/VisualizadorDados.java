@@ -440,8 +440,14 @@ public class VisualizadorDados extends JFrame {
                 for (String coluna : colunasSelecionadas) {
                     Object valor = rs.getObject(coluna);
                     if (colunasParaInt.contains(coluna)) {
+                        String strValor = String.valueOf(valor).trim();
                         try {
-                            valor = Integer.parseInt(String.valueOf(valor).replaceAll("\\D+", ""));
+                            if (strValor.matches("\\d+\\.\\d+")) {
+                                valor = Double.parseDouble(strValor);
+                            } else {
+                                strValor = strValor.replaceAll("[^\\d-]", "");
+                                valor = Integer.parseInt(strValor);
+                            }
                         } catch (NumberFormatException ex) {
                             valor = 0;
                         }
