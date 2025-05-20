@@ -9,8 +9,6 @@ import java.awt.*;
 import java.io.File;
 import java.io.FileWriter;
 import java.sql.*;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.Vector;
@@ -49,6 +47,8 @@ public class VisualizadorDados extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         JMenu menuArquivo = new JMenu("Opções");
         JMenu menuExportacao = new JMenu("Exportação");
+        JMenuItem menuItemSanitizacao = new JMenuItem("Sanitizações");
+
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JButton loadButton = new JButton("Carregar dados");
@@ -99,6 +99,7 @@ public class VisualizadorDados extends JFrame {
 
         menuExportacao.add(menuItemExportarCSV);
         menuExportacao.add(menuItemExportarSQL);
+        menuArquivo.add(menuItemSanitizacao);
 
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
@@ -147,6 +148,11 @@ public class VisualizadorDados extends JFrame {
 
         menuItemExportarSQL.addActionListener(e -> {
             ExportarSQLDialog dialog = new ExportarSQLDialog(this);
+            dialog.setVisible(true);
+        });
+
+        menuItemSanitizacao.addActionListener(e -> {
+            TelaSanitizacao dialog = new TelaSanitizacao(this);
             dialog.setVisible(true);
         });
 
@@ -526,6 +532,34 @@ public class VisualizadorDados extends JFrame {
             JOptionPane.showMessageDialog(this, "Erro ao atualizar dados: " + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
         } finally {
             loadData();
+        }
+    }
+
+    public String[] getColumnNames() {
+        return columnNames.toArray(new String[0]);
+    }
+
+    public int getColumnIndex(String columnName) {
+        return columnNames.indexOf(columnName);
+    }
+
+    public DefaultTableModel getTableModel() {
+        return tableModel;
+    }
+
+    public void atualizarColunaNoBanco(String coluna, List<String> ids) {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+            String sql = "UPDATE csv_data SET " + coluna + " = ? WHERE id = ?";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            int colIndex = getColumnIndex(coluna);
+            for (int i = 0; i < tableModel.getRowCount(); i++) {
+                stmt.setString(1, (String) tableModel.getValueAt(i, colIndex));
+                stmt.setString(2, ids.get(i)); // Usa o ID real da linha
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao atualizar banco: " + e.getMessage());
         }
     }
 
