@@ -11,7 +11,7 @@ public class EdicaoEmMassaDialog extends JDialog {
     public EdicaoEmMassaDialog(Frame owner, Vector<String> colunas) {
         super(owner, "Edição em Massa", true);
 
-        colunas.removeIf(coluna -> coluna.equalsIgnoreCase("id"));
+//        colunas.removeIf(coluna -> coluna.equalsIgnoreCase("id"));
         setLayout(new BorderLayout());
         setSize(350, 180);
         setLocationRelativeTo(owner);
