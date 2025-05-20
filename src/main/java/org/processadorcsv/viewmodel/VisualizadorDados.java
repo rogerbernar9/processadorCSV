@@ -16,6 +16,7 @@ import java.util.Vector;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import org.processadorcsv.viewmodel.util.TelaDuplicidades;
 
 public class VisualizadorDados extends JFrame {
 
@@ -50,6 +51,7 @@ public class VisualizadorDados extends JFrame {
         JMenu menuExportacao = new JMenu("Exportação");
         JMenuItem menuItemSanitizacao = new JMenuItem("Sanitizações");
         JButton loadMissingButton = new JButton("Carregar dados vazios");
+        JMenuItem menuItemDuplicidades = new JMenuItem("Carregar Duplicatas");
 
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -103,6 +105,7 @@ public class VisualizadorDados extends JFrame {
         menuExportacao.add(menuItemExportarCSV);
         menuExportacao.add(menuItemExportarSQL);
         menuArquivo.add(menuItemSanitizacao);
+        menuArquivo.add(menuItemDuplicidades);
 
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
@@ -180,6 +183,11 @@ public class VisualizadorDados extends JFrame {
         loadMissingButton.addActionListener(e -> {
             CarregadorDadosVazios carregador = new CarregadorDadosVazios(this, tableModel, table, columnNames);
             carregador.exibirDialogoSelecaoColunas();
+        });
+
+        menuItemDuplicidades.addActionListener(e -> {
+            TelaDuplicidades duplicidades = new TelaDuplicidades(columnNames);
+            duplicidades.setVisible(true);
         });
 
         menuItemEdicaoMassa.addActionListener(e -> {
