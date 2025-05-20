@@ -89,41 +89,15 @@ public class TelaSanitizacao extends JDialog {
     private void aplicarSanitizacao() {
         List<String> colunasSelecionadas = listaColunas.getSelectedValuesList();
         if (colunasSelecionadas.isEmpty()) return;
-//        int idIndex = pai.getColumnIndex("id");
-        int totalTarefas = colunasSelecionadas.size();
-        progressBar.setMaximum(totalTarefas);
+        progressBar.setMaximum(colunasSelecionadas.size());
         progressBar.setValue(0);
         progressBar.setVisible(true);
         statusLabel.setText("Sanitizando...");
-        ExecutorService executor = Executors.newFixedThreadPool(totalTarefas);
+        ExecutorService executor = Executors.newFixedThreadPool(colunasSelecionadas.size());
         for (String coluna : colunasSelecionadas) {
             executor.submit(() -> {
                 try {
-                    int colIndex = pai.getColumnIndex(coluna);
-                    int idIndex = pai.getColumnIndex("id");
-                    Map<String, String> valoresPorId = new HashMap<>();
-                    for (int i = 0; i < pai.getTableModel().getRowCount(); i++) {
-                        String valorOriginal = (String) pai.getTableModel().getValueAt(i, colIndex);
-                        String sanitizado;
-                        if (radioEspacos.isSelected()) {
-                            sanitizado = SanitizacaoUtil.removerEspacos(valorOriginal);
-                        } else if (radioRemoverEspeciais.isSelected()) {
-                            sanitizado = SanitizacaoUtil.removerCaracteresEspeciais(valorOriginal);
-                        } else if (radioCaixaAlta.isSelected()) {
-                            sanitizado = SanitizacaoUtil.paraCaixaAlta(valorOriginal);
-                        } else if (radioPreencherCpf.isSelected()) {
-                            sanitizado = SanitizacaoUtil.preencherCpfComZeros(valorOriginal);
-                        } else {
-                            sanitizado = valorOriginal;
-                        }
-                        // Atualiza a tabela visível
-                        pai.getTableModel().setValueAt(sanitizado, i, colIndex);
-                        // Registra para o banco
-                        String id = (String) pai.getTableModel().getValueAt(i, idIndex);
-                        valoresPorId.put(id, sanitizado);
-                    }
-                    // Atualiza no banco
-                    atualizarDadosSanitizadosNoBanco(coluna, valoresPorId);
+                    sanitizarColunaNoBanco(coluna);
                     SwingUtilities.invokeLater(() -> progressBar.setValue(progressBar.getValue() + 1));
                 } catch (Exception ex) {
                     ex.printStackTrace();
@@ -133,9 +107,9 @@ public class TelaSanitizacao extends JDialog {
         new Thread(() -> {
             executor.shutdown();
             try {
-                executor.awaitTermination(5, TimeUnit.MINUTES);
-            } catch (InterruptedException ex) {
-                ex.printStackTrace();
+                executor.awaitTermination(10, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
             SwingUtilities.invokeLater(() -> {
                 JOptionPane.showMessageDialog(this, "Sanitização concluída com sucesso.");
@@ -143,6 +117,41 @@ public class TelaSanitizacao extends JDialog {
                 dispose();
             });
         }).start();
+    }
+
+    private void sanitizarColunaNoBanco(String coluna) {
+        String sqlSelect = "SELECT id, " + coluna + " FROM csv_data";
+        String sqlUpdate = "UPDATE csv_data SET " + coluna + " = ? WHERE id = ?";
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+             PreparedStatement stmtSelect = conn.prepareStatement(sqlSelect);
+             PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdate)) {
+            var rs = stmtSelect.executeQuery();
+            while (rs.next()) {
+                String id = rs.getString("id");
+                String valorOriginal = rs.getString(coluna);
+                String sanitizado;
+                if (radioEspacos.isSelected()) {
+                    sanitizado = SanitizacaoUtil.removerEspacos(valorOriginal);
+                } else if (radioRemoverEspeciais.isSelected()) {
+                    sanitizado = SanitizacaoUtil.removerCaracteresEspeciais(valorOriginal);
+                } else if (radioCaixaAlta.isSelected()) {
+                    sanitizado = SanitizacaoUtil.paraCaixaAlta(valorOriginal);
+                } else if (radioPreencherCpf.isSelected()) {
+                    sanitizado = SanitizacaoUtil.preencherCpfComZeros(valorOriginal);
+                } else {
+                    sanitizado = valorOriginal;
+                }
+                if (!sanitizado.equals(valorOriginal)) {
+                    stmtUpdate.setString(1, sanitizado);
+                    stmtUpdate.setString(2, id);
+                    stmtUpdate.addBatch();
+                }
+            }
+            stmtUpdate.executeBatch();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao sanitizar coluna " + coluna + ": " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     private void atualizarDadosSanitizadosNoBanco(String coluna, Map<String, String> valoresPorId) {
