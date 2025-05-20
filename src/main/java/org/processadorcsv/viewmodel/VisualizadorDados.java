@@ -2,6 +2,7 @@ package org.processadorcsv.viewmodel;
 
 import org.processadorcsv.jdbd.db.DatabaseUtil;
 import org.processadorcsv.viewmodel.util.CSVExporterWorker;
+import org.processadorcsv.viewmodel.util.CarregadorDadosVazios;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -48,6 +49,7 @@ public class VisualizadorDados extends JFrame {
         JMenu menuArquivo = new JMenu("Opções");
         JMenu menuExportacao = new JMenu("Exportação");
         JMenuItem menuItemSanitizacao = new JMenuItem("Sanitizações");
+        JButton loadMissingButton = new JButton("Carregar dados vazios");
 
 
         JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -66,6 +68,7 @@ public class VisualizadorDados extends JFrame {
         topPanel.add(insertButton);
         topPanel.add(editButton);
         topPanel.add(deleteButton);
+        topPanel.add(loadMissingButton);
 
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(table), BorderLayout.CENTER);
@@ -172,6 +175,11 @@ public class VisualizadorDados extends JFrame {
                 loadColumnNames();
                 loadData();
             }
+        });
+
+        loadMissingButton.addActionListener(e -> {
+            CarregadorDadosVazios carregador = new CarregadorDadosVazios(this, tableModel, table, columnNames);
+            carregador.exibirDialogoSelecaoColunas();
         });
 
         menuItemEdicaoMassa.addActionListener(e -> {
