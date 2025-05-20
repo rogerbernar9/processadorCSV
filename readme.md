@@ -13,6 +13,9 @@ Aplicação desktop em Java (Swing) apresentando grande performance para leitura
 - Nome das colunas sanitizado para evitar conflitos com o SQLite.
 - Capacidade de inclusão, alteração, exclusão dos dados inseridos em seu banco de dados interno
 - Exportação dos dados de seu banco de dados interno SQLite para CSV ou SQL Insert
+- Possibilidade de editar vários dados de uma só vez
+- Sanitizações de campos
+- Visualizar linhas duplicadas por coluna selecionada
 ## Tecnologias utilizadas
 - Java 17+
 - Swing (UI)
