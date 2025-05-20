@@ -186,9 +186,9 @@ public class VisualizadorDados extends JFrame {
                 String coluna = dialog.getColunaSelecionada();
                 String novoValor = dialog.getNovoValor();
                 int colunaIndex = columnNames.indexOf(coluna);
-                for (int row : linhasSelecionadas) {
+                /*for (int row : linhasSelecionadas) {
                     tableModel.setValueAt(novoValor, row, colunaIndex);
-                }
+                }*/
                 atualizarDadosNoBancoEmMassa(linhasSelecionadas, coluna, novoValor);
             }
         });
@@ -510,6 +510,14 @@ public class VisualizadorDados extends JFrame {
     }
 
     private void atualizarDadosNoBancoEmMassa(int[] linhas, String coluna, String novoValor) {
+        if (coluna.equalsIgnoreCase("id")) {
+            JOptionPane.showMessageDialog(this,
+                    "A coluna 'id' não pode ser editada.",
+                    "Operação inválida",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
              Statement stmt = conn.createStatement()) {
             for (int row : linhas) {
