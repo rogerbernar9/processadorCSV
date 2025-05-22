@@ -33,7 +33,6 @@ public class CsvReader extends JFrame {
     private String separator = ",";
     private final JPanel contentPanel = new JPanel(new BorderLayout());
 
-    private final String versao = "1.6.0";
     private JMenuItem menuItemCarregarCSV;
     private JMenuItem menuItemVisualizarDados;
 
