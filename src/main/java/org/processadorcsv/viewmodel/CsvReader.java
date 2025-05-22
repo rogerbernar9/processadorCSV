@@ -34,6 +34,9 @@ public class CsvReader extends JFrame {
     private final JPanel contentPanel = new JPanel(new BorderLayout());
 
     private final String versao = "1.6.0";
+    private JMenuItem menuItemCarregarCSV;
+    private JMenuItem menuItemVisualizarDados;
+
 
 
     public CsvReader() {
@@ -55,8 +58,8 @@ public class CsvReader extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         // cria um menu
         JMenu menuArquivo = new JMenu("Opções");
-        JMenuItem menuItemCarregarCSV = new JMenuItem("Carregar CSV");
-        JMenuItem menuItemVisualizarDados = new JMenuItem("Visualizar Dados");
+        menuItemCarregarCSV = new JMenuItem("Carregar CSV");
+        menuItemVisualizarDados = new JMenuItem("Visualizar Dados");
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
         // Adiciona o menu à barra de menu
@@ -139,6 +142,9 @@ public class CsvReader extends JFrame {
     }
 
     private void loadDataIntoSqlite(File csvFile) {
+        menuItemCarregarCSV.setEnabled(false);
+        menuItemVisualizarDados.setEnabled(false);
+
         boolean hasHeader = headerYes.isSelected();
         leituraFinalizada.set(false);
 
@@ -168,6 +174,10 @@ public class CsvReader extends JFrame {
                 e.printStackTrace();
             } finally {
                 leituraFinalizada.set(true);
+                SwingUtilities.invokeLater(() -> {
+                    menuItemCarregarCSV.setEnabled(true);
+                    menuItemVisualizarDados.setEnabled(true);
+                });
             }
         });
         int consumidores = 2;
@@ -206,6 +216,7 @@ public class CsvReader extends JFrame {
                 }
             });
         }
+
     }
 
     private String[] parseCsvLine(String line) {
