@@ -59,6 +59,12 @@ java -cp ".;out;sqlite-jdbc-<versão>.jar" org.example.swing.CsvReader
 Ou
 java -cp "ProcessadorCSV-1.0-SNAPSHOT.jar:sqlite-jdbc-3.45.1.0.jar" org.processadorcsv.Main
 Ou utilizando uma IDE como IntelliJ ou Eclipse, basta importar o projeto e executar a classe CsvReader.
+
+Para executar no windows crie um .bat com o conteúdo:
+
+@echo off
+start "ProcessadorCSV" /B javaw -cp "ProcessadorCSV-1.0-SNAPSHOT.jar;sqlite-jdbc-3.45.1.0.jar" org.processadorcsv.Main
+
 4. Passos na interface:
 Clique em "Carregar CSV" e selecione o arquivo desejado.
 Aguarde o processamento (ocorre em segundo plano), será criado em '/home/seuusuario/.processadorcsv' o arquivo BD local do sqlite 'data.db'.
@@ -73,6 +79,6 @@ roger.bernar9@gmail.com
 
 
 
-
+                                      
 
 
