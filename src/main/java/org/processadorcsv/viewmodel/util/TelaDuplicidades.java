@@ -14,6 +14,7 @@ public class TelaDuplicidades extends JFrame {
     private final DefaultTableModel tableModel = new DefaultTableModel();
     private final JTable tabela = new JTable(tableModel);
     private final JButton buscarButton = new JButton("Buscar Duplicidades");
+    private final JButton exportarButton = new JButton("Exportar XLS");
 
     public TelaDuplicidades(Vector<String> colunas) {
         setTitle("Buscar Duplicidades");
@@ -21,22 +22,27 @@ public class TelaDuplicidades extends JFrame {
         setLayout(new BorderLayout());
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         JPanel topPanel = new JPanel(new FlowLayout());
+
         topPanel.add(new JLabel("Selecionar coluna:"));
         for (String coluna : colunas) {
             colunaComboBox.addItem(coluna);
         }
         topPanel.add(colunaComboBox);
         topPanel.add(buscarButton);
+        topPanel.add(exportarButton);
+
         add(topPanel, BorderLayout.NORTH);
         add(new JScrollPane(tabela), BorderLayout.CENTER);
         buscarButton.addActionListener(e -> buscarDuplicidades());
+        exportarButton.addActionListener(e -> exportarParaXLS());
+
     }
     private void buscarDuplicidades() {
         String colunaSelecionada = (String) colunaComboBox.getSelectedItem();
         if (colunaSelecionada == null) return;
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+DatabaseUtil.getPath())) {
             Statement stmt = conn.createStatement();
-            // Primeiro, busca os valores duplicados
+
             String sqlDuplicados = "SELECT " + colunaSelecionada + " FROM csv_data GROUP BY " + colunaSelecionada + " HAVING COUNT(*) > 1";
             ResultSet rsDuplicados = stmt.executeQuery(sqlDuplicados);
             Vector<String> valoresDuplicados = new Vector<>();
@@ -49,7 +55,7 @@ public class TelaDuplicidades extends JFrame {
                 tableModel.setColumnCount(0);
                 return;
             }
-            // Depois, busca os registros correspondentes
+
             String placeholders = String.join(",", java.util.Collections.nCopies(valoresDuplicados.size(), "?"));
             String sqlFinal = "SELECT * FROM csv_data WHERE " + colunaSelecionada + " IN (" + placeholders + ")";
             PreparedStatement ps = conn.prepareStatement(sqlFinal);
@@ -65,7 +71,7 @@ public class TelaDuplicidades extends JFrame {
                 nomesColunas.add(meta.getColumnName(i));
             }
             tableModel.setColumnIdentifiers(nomesColunas);
-            // Preenche os dados
+            // popular
             Vector<Vector<Object>> data = new Vector<>();
             while (rs.next()) {
                 Vector<Object> linha = new Vector<>();
@@ -81,6 +87,44 @@ public class TelaDuplicidades extends JFrame {
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Erro ao buscar duplicidades: " + ex.getMessage());
             ex.printStackTrace();
+        }
+    }
+
+    private void exportarParaXLS() {
+        if (tableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this, "Nenhum dado para exportar.");
+            return;
+        }
+        JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Salvar como");
+        fileChooser.setSelectedFile(new java.io.File("duplicidades.xls"));
+        int userSelection = fileChooser.showSaveDialog(this);
+        if (userSelection != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        java.io.File fileToSave = fileChooser.getSelectedFile();
+        try (org.apache.poi.hssf.usermodel.HSSFWorkbook workbook = new org.apache.poi.hssf.usermodel.HSSFWorkbook()) {
+            org.apache.poi.hssf.usermodel.HSSFSheet sheet = workbook.createSheet("Duplicidades");
+
+            org.apache.poi.hssf.usermodel.HSSFRow headerRow = sheet.createRow(0);
+            for (int i = 0; i < tableModel.getColumnCount(); i++) {
+                headerRow.createCell(i).setCellValue(tableModel.getColumnName(i));
+            }
+
+            for (int i = 0; i < tableModel.getRowCount(); i++) {
+                org.apache.poi.hssf.usermodel.HSSFRow row = sheet.createRow(i + 1);
+                for (int j = 0; j < tableModel.getColumnCount(); j++) {
+                    Object value = tableModel.getValueAt(i, j);
+                    row.createCell(j).setCellValue(value != null ? value.toString() : "");
+                }
+            }
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(fileToSave)) {
+                workbook.write(out);
+            }
+            JOptionPane.showMessageDialog(this, "Arquivo exportado com sucesso para:\n" + fileToSave.getAbsolutePath());
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Erro ao exportar: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
