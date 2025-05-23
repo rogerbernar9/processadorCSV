@@ -120,12 +120,23 @@ public class TelaSanitizacao extends JDialog {
     }
 
     private void sanitizarColunaNoBanco(String coluna) {
+        String sqlCount = "SELECT COUNT(*) FROM csv_data";
         String sqlSelect = "SELECT id, " + coluna + " FROM csv_data";
         String sqlUpdate = "UPDATE csv_data SET " + coluna + " = ? WHERE id = ?";
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
+             PreparedStatement stmtCount = conn.prepareStatement(sqlCount);
              PreparedStatement stmtSelect = conn.prepareStatement(sqlSelect);
              PreparedStatement stmtUpdate = conn.prepareStatement(sqlUpdate)) {
+            int totalLinhas;
+            var rsCount = stmtCount.executeQuery();
+            if (rsCount.next()) {
+                totalLinhas = rsCount.getInt(1);
+            } else {
+                totalLinhas = 0;
+            }
             var rs = stmtSelect.executeQuery();
+            int linhasProcessadas = 0;
+
             while (rs.next()) {
                 String id = rs.getString("id");
                 String valorOriginal = rs.getString(coluna);
@@ -144,10 +155,18 @@ public class TelaSanitizacao extends JDialog {
                 if (!sanitizado.equals(valorOriginal)) {
                     stmtUpdate.setString(1, sanitizado);
                     stmtUpdate.setString(2, id);
-                    stmtUpdate.addBatch();
+                    stmtUpdate.executeUpdate();
                 }
+                linhasProcessadas++;
+                final int progresso = linhasProcessadas;
+                SwingUtilities.invokeLater(() -> {
+                    progressBar.setMaximum(totalLinhas);
+                    progressBar.setValue(progresso);
+                    int percent = (int) (((double) progresso / totalLinhas) * 100);
+                    statusLabel.setText("Sanitizando... " + percent + "%");
+                });
+
             }
-            stmtUpdate.executeBatch();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Erro ao sanitizar coluna " + coluna + ": " + e.getMessage());
             e.printStackTrace();
