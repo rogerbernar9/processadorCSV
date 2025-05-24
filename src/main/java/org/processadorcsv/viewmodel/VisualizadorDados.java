@@ -188,7 +188,7 @@ public class VisualizadorDados extends JFrame {
         menuItemExportarExcel.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser();
             fileChooser.setDialogTitle("Salvar como Excel");
-            fileChooser.setSelectedFile(new File("dados_exportados.xlsx"));
+            fileChooser.setSelectedFile(new File("dados_exportados.xls"));
             int userSelection = fileChooser.showSaveDialog(this);
             if (userSelection == JFileChooser.APPROVE_OPTION) {
                 File fileToSave = fileChooser.getSelectedFile();
