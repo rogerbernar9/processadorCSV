@@ -16,6 +16,8 @@ import java.util.Vector;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+
+import org.processadorcsv.viewmodel.util.ExportadorExcel;
 import org.processadorcsv.viewmodel.util.TelaDuplicidades;
 
 public class VisualizadorDados extends JFrame {
@@ -97,12 +99,15 @@ public class VisualizadorDados extends JFrame {
         JMenuItem menuItemExportarCSV = new JMenuItem("Exportar para CSV");
         JMenuItem menuItemExportarSQL = new JMenuItem("Exportar para SQL insert");
         JMenuItem menuItemEdicaoMassa = new JMenuItem("Edição em Massa");
+        JMenuItem menuItemExportarExcel = new JMenuItem("Exportar para Excel");
+
 
         menuArquivo.add(menuItemRenomearColumas);
         menuArquivo.add(menuItemAdicionarColuna);
         menuArquivo.add(menuItemEdicaoMassa);
 
         menuExportacao.add(menuItemExportarCSV);
+        menuExportacao.add(menuItemExportarExcel);
         menuExportacao.add(menuItemExportarSQL);
         menuArquivo.add(menuItemSanitizacao);
         menuArquivo.add(menuItemDuplicidades);
@@ -177,6 +182,30 @@ public class VisualizadorDados extends JFrame {
                 columnNames.clear();
                 loadColumnNames();
                 loadData();
+            }
+        });
+
+        menuItemExportarExcel.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Salvar como Excel");
+            fileChooser.setSelectedFile(new File("dados_exportados.xlsx"));
+            int userSelection = fileChooser.showSaveDialog(this);
+            if (userSelection == JFileChooser.APPROVE_OPTION) {
+                File fileToSave = fileChooser.getSelectedFile();
+
+                new Thread(() -> {
+                    try {
+                        ExportadorExcel.exportar(columnNames, fileToSave, DatabaseUtil.getPath());
+                        SwingUtilities.invokeLater(() ->
+                                JOptionPane.showMessageDialog(this, "Exportação concluída!")
+                        );
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+                        SwingUtilities.invokeLater(() ->
+                                JOptionPane.showMessageDialog(this, "Erro ao exportar: " + ex.getMessage())
+                        );
+                    }
+                }).start();
             }
         });
 
