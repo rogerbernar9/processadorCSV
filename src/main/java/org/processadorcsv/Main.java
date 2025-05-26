@@ -1,6 +1,7 @@
 package org.processadorcsv;
 
 
+import org.processadorcsv.config.Configuracao;
 import org.processadorcsv.viewmodel.CsvReader;
 import org.processadorcsv.viewmodel.LoginLDAPView;
 
@@ -13,6 +14,7 @@ public class Main {
         // Imprime no console versão java e caminho jdk
         System.out.println("Executando com Java versão: " + javaVersion);
         System.out.println("Java home (JDK/JRE): " + javaHome);
+        System.out.println("Versão da aplicaçao: "+Configuracao.get("VERSAO"));
         try (java.io.PrintWriter out = new java.io.PrintWriter("versao_java.log")) {
             out.println("Executando com Java versão: " + javaVersion);
             out.println("Java home (JDK/JRE): " + javaHome);
