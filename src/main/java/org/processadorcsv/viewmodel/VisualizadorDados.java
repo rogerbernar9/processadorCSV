@@ -100,11 +100,13 @@ public class VisualizadorDados extends JFrame {
         JMenuItem menuItemExportarSQL = new JMenuItem("Exportar para SQL insert");
         JMenuItem menuItemEdicaoMassa = new JMenuItem("Edição em Massa");
         JMenuItem menuItemExportarExcel = new JMenuItem("Exportar para Excel");
+        JMenuItem menuItemPopularColuna = new JMenuItem("Popular Coluna");
 
 
         menuArquivo.add(menuItemRenomearColumas);
         menuArquivo.add(menuItemAdicionarColuna);
         menuArquivo.add(menuItemEdicaoMassa);
+        menuArquivo.add(menuItemPopularColuna);
 
         menuExportacao.add(menuItemExportarCSV);
         menuExportacao.add(menuItemExportarExcel);
@@ -236,6 +238,12 @@ public class VisualizadorDados extends JFrame {
                 }*/
                 atualizarDadosNoBancoEmMassa(linhasSelecionadas, coluna, novoValor);
             }
+        });
+
+        menuItemPopularColuna.addActionListener(e -> {
+            PopularColunaDialog dialog = new PopularColunaDialog(this, columnNames);
+            dialog.setVisible(true);
+            loadData();
         });
 
         loadColumnNames();

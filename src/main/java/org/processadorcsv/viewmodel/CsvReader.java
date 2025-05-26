@@ -1,11 +1,13 @@
 package org.processadorcsv.viewmodel;
 
+import org.mozilla.universalchardet.UniversalDetector;
 import org.processadorcsv.jdbd.db.DatabaseUtil;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.*;
+import java.nio.charset.Charset;
 import java.sql.*;
 import java.util.List;
 import java.util.*;
@@ -146,9 +148,11 @@ public class CsvReader extends JFrame {
 
         boolean hasHeader = headerYes.isSelected();
         leituraFinalizada.set(false);
+        String chartSetName = this.detectCharset(csvFile);
+        System.out.println(chartSetName);
 
         executor.execute(() -> {
-            try (BufferedReader br = new BufferedReader(new FileReader(csvFile))) {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), Charset.forName(chartSetName)))) {
                 String line = br.readLine();
                 if (!hasHeader && line != null) {
                     csvQueue.put(List.of(line));
@@ -249,6 +253,24 @@ public class CsvReader extends JFrame {
         }
         return detected;
     }
+
+    private String detectCharset(File file) {
+        byte[] buf = new byte[4096];
+        try (FileInputStream fis = new FileInputStream(file)) {
+            UniversalDetector detector = new UniversalDetector(null);
+            int nread;
+            while ((nread = fis.read(buf)) > 0 && !detector.isDone()) {
+                detector.handleData(buf, 0, nread);
+            }
+            detector.dataEnd();
+            String encoding = detector.getDetectedCharset();
+            return encoding != null ? encoding : "UTF-8";
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "UTF-8";
+        }
+    }
+
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> new CsvReader().setVisible(true));
