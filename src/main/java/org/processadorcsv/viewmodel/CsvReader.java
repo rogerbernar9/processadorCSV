@@ -1,6 +1,7 @@
 package org.processadorcsv.viewmodel;
 
 import org.mozilla.universalchardet.UniversalDetector;
+import org.processadorcsv.ferramentaBD.view.LoginView;
 import org.processadorcsv.jdbd.db.DatabaseUtil;
 
 import javax.swing.*;
@@ -37,6 +38,7 @@ public class CsvReader extends JFrame {
 
     private JMenuItem menuItemCarregarCSV;
     private JMenuItem menuItemVisualizarDados;
+    private JMenuItem menuItemConectarBancoDados;
 
 
 
@@ -59,12 +61,13 @@ public class CsvReader extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         // cria um menu
         JMenu menuArquivo = new JMenu("Opções");
+        JMenu menuBD = new JMenu("Banco de Dados");
         menuItemCarregarCSV = new JMenuItem("Carregar CSV");
         menuItemVisualizarDados = new JMenuItem("Visualizar Dados");
+
+        menuItemConectarBancoDados = new JMenuItem("Conectar em um Banco de dados");
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
-        // Adiciona o menu à barra de menu
-        menuBar.add(menuArquivo);
 
         // Define a barra de menu na janela
         setJMenuBar(menuBar);
@@ -72,15 +75,21 @@ public class CsvReader extends JFrame {
         // Adiciona itens ao menu
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
-
+        menuBD.add(menuItemConectarBancoDados);
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
+        menuBar.add(menuBD);
 
         menuItemCarregarCSV.addActionListener(e -> loadCsv());
         menuItemVisualizarDados.addActionListener(e -> {
             VisualizadorDados visualizadorDados = new VisualizadorDados();
             visualizadorDados.setVisible(true);
             this.setVisible(false);
+        });
+
+        menuItemConectarBancoDados.addActionListener(e -> {
+            LoginView loginView = new LoginView();
+            loginView.setVisible(true);
         });
 
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
