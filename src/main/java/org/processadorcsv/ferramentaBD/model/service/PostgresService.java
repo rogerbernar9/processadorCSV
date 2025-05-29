@@ -66,7 +66,12 @@ public class PostgresService extends BaseDBService {
         sql.append(") ").append(values).append(")");
         try (PreparedStatement stmt = connection.prepareStatement(sql.toString())) {
             for (int i = 0; i < campos.size(); i++) {
-                stmt.setString(i + 1, dados.get(campos.get(i)));
+                String valor = dados.get(campos.get(i));
+                if (valor == null || valor.trim().isEmpty()) {
+                    stmt.setNull(i + 1, Types.NULL);
+                } else {
+                    stmt.setString(i + 1, valor);
+                }
             }
             stmt.executeUpdate();
         }
