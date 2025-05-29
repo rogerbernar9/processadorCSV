@@ -1,6 +1,7 @@
 package org.processadorcsv.viewmodel;
 
 import org.mozilla.universalchardet.UniversalDetector;
+import org.processadorcsv.ferramentaBD.view.LoginView;
 import org.processadorcsv.jdbd.db.DatabaseUtil;
 
 import javax.swing.*;
@@ -34,10 +35,10 @@ public class CsvReader extends JFrame {
     private final JLabel statusLabel = new JLabel("Linhas inseridas: 0");
     private String separator = ",";
     private final JPanel contentPanel = new JPanel(new BorderLayout());
-
     private JMenuItem menuItemCarregarCSV;
     private JMenuItem menuItemVisualizarDados;
-
+    private JMenuItem menuItemConectarBancoDados;
+    private JMenuItem menuItemApagarSQLite;
 
 
     public CsvReader() {
@@ -59,12 +60,15 @@ public class CsvReader extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         // cria um menu
         JMenu menuArquivo = new JMenu("Opções");
+        JMenu menuBD = new JMenu("Banco de Dados");
         menuItemCarregarCSV = new JMenuItem("Carregar CSV");
         menuItemVisualizarDados = new JMenuItem("Visualizar Dados");
+
+        menuItemConectarBancoDados = new JMenuItem("Conectar em um Banco de dados Externo");
+        menuItemApagarSQLite = new JMenuItem("Descartar banco local");
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
-        // Adiciona o menu à barra de menu
-        menuBar.add(menuArquivo);
+
 
         // Define a barra de menu na janela
         setJMenuBar(menuBar);
@@ -72,15 +76,30 @@ public class CsvReader extends JFrame {
         // Adiciona itens ao menu
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
-
+        menuArquivo.add(menuItemApagarSQLite);
+        menuBD.add(menuItemConectarBancoDados);
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
+        menuBar.add(menuBD);
 
         menuItemCarregarCSV.addActionListener(e -> loadCsv());
+
+        menuItemApagarSQLite.setEnabled(checkDatabaseExists());
+        menuItemVisualizarDados.setEnabled(checkDatabaseExists());
+
         menuItemVisualizarDados.addActionListener(e -> {
             VisualizadorDados visualizadorDados = new VisualizadorDados();
             visualizadorDados.setVisible(true);
             this.setVisible(false);
+        });
+
+        menuItemConectarBancoDados.addActionListener(e -> {
+            LoginView loginView = new LoginView();
+            loginView.setVisible(true);
+        });
+
+        menuItemApagarSQLite.addActionListener(e -> {
+            deleteSqliteDatabase();
         });
 
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
@@ -145,6 +164,7 @@ public class CsvReader extends JFrame {
     private void loadDataIntoSqlite(File csvFile) {
         menuItemCarregarCSV.setEnabled(false);
         menuItemVisualizarDados.setEnabled(false);
+        menuItemApagarSQLite.setEnabled(false);
 
         boolean hasHeader = headerYes.isSelected();
         leituraFinalizada.set(false);
@@ -180,6 +200,7 @@ public class CsvReader extends JFrame {
                 SwingUtilities.invokeLater(() -> {
                     menuItemCarregarCSV.setEnabled(true);
                     menuItemVisualizarDados.setEnabled(true);
+                    menuItemApagarSQLite.setEnabled(true);
                 });
             }
         });
@@ -270,6 +291,45 @@ public class CsvReader extends JFrame {
             return "UTF-8";
         }
     }
+
+    private void deleteSqliteDatabase() {
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath())) {
+            Statement stmt = conn.createStatement();
+            int descarte = stmt.executeUpdate("DROP TABLE IF EXISTS csv_data");
+            System.out.println(descarte);
+            JOptionPane.showMessageDialog(null, "Banco de dados descartado com sucesso");
+
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao apagar banco de dados.", "Erro", JOptionPane.ERROR_MESSAGE);
+        } finally {
+            reloadWindow();
+        }
+    }
+
+    private boolean checkDatabaseExists() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+            DatabaseMetaData meta = conn.getMetaData();
+            try (ResultSet rs = meta.getTables(null, null, "csv_data", null)) {
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private void reloadWindow() {
+        this.dispose();
+        SwingUtilities.invokeLater(() ->
+        {
+            CsvReader csvReader = new CsvReader();
+            csvReader.setVisible(true);
+        });
+    }
+
 
 
     public static void main(String[] args) {
