@@ -121,12 +121,18 @@ public class MySQLService extends BaseDBService {
                 if (valor == null || valor.trim().isEmpty()) {
                     stmt.setNull(i + 1, Types.NULL);
                 } else {
+
+                    if (valor.startsWith("[") && valor.endsWith("]")) {
+
+                        valor = valor.replaceAll("\"\"", "\"");
+                    }
                     stmt.setString(i + 1, valor);
                 }
             }
             stmt.executeUpdate();
         }
     }
+
     @Override
     public void editarRegistro(String tabela, Map<String, String> novosDados, String condicaoWhere) throws SQLException {
         StringBuilder sql = new StringBuilder("UPDATE ").append(tabela).append(" SET ");
