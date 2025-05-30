@@ -2,10 +2,7 @@ package org.processadorcsv.ferramentaBD.model.service;
 
 import javax.swing.*;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class PostgresService extends BaseDBService {
 
@@ -115,6 +112,35 @@ public class PostgresService extends BaseDBService {
             dados.put(colunas[i], valores[i]);
         }
         inserirRegistro(tabela, dados); // reutiliza o método já existente
+    }
+
+    public void inserirRegistroSeCamposCorrespondentes(String tabela, Map<String, Object> dadosOrigem) throws Exception {
+        String[] colunasDestino = listarColunas(tabela);
+        Map<String, Boolean> autoInc = colunasAutoIncrementadas(tabela);
+
+        List<String> colunasValidas = new ArrayList<>();
+        for (String col : colunasDestino) {
+            if (!autoInc.getOrDefault(col, false)) {
+                colunasValidas.add(col);
+            }
+        }
+
+        Set<String> origemSemId = new HashSet<>(dadosOrigem.keySet());
+        origemSemId.remove("id");
+        Set<String> destinoSet = new HashSet<>(colunasValidas);
+        if (!destinoSet.equals(origemSemId)) {
+            System.out.println("Ignorando registro. Campos não correspondem:");
+            System.out.println("Origem: " + origemSemId);
+            System.out.println("Destino: " + destinoSet);
+            throw new Exception("Campos não correspondem!");
+        }
+
+        Map<String, String> dadosConvertidos = new HashMap<>();
+        for (String col : colunasValidas) {
+            Object val = dadosOrigem.get(col);
+            dadosConvertidos.put(col, val != null ? val.toString() : null);
+        }
+        inserirRegistro(tabela, dadosConvertidos);
     }
 
     @Override
