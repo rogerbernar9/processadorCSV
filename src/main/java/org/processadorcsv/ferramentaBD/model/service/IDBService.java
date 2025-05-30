@@ -18,4 +18,5 @@ public interface IDBService {
     void editarRegistro(String tabela, Map<String, String> dados, String condicao) throws SQLException;
     void inserirRegistro(String tabela, String[] colunas, String[] valores) throws SQLException;
 
+    void inserirRegistroSeCamposCorrespondentes(String tabelaDestino, Map<String, Object> dadosConvertidos) throws Exception;
 }

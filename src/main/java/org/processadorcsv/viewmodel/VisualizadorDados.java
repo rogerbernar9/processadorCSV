@@ -38,6 +38,7 @@ public class VisualizadorDados extends JFrame {
     JButton editButton = new JButton("Editar");
     JButton deleteButton = new JButton("Excluir");
     JButton exportSqlButton = new JButton("Exportar SQL");
+    JMenuItem menuItemApagarColuna = new JMenuItem("Apagar Coluna");
     JCheckBox[] sanitizeChecks = new JCheckBox[columnNames.size()];
     JCheckBox[] parseDateChecks = new JCheckBox[columnNames.size()];
 
@@ -95,6 +96,7 @@ public class VisualizadorDados extends JFrame {
 
         JMenuItem menuItemRenomearColumas = new JMenuItem("Renomear Colunas");
         JMenuItem menuItemAdicionarColuna = new JMenuItem("Adicionar Nova Coluna");
+        JMenuItem menuItemApagarColuna = new JMenuItem("Remover coluna");
 
         JMenuItem menuItemExportarCSV = new JMenuItem("Exportar para CSV");
         JMenuItem menuItemExportarSQL = new JMenuItem("Exportar para SQL insert");
@@ -113,6 +115,7 @@ public class VisualizadorDados extends JFrame {
         menuExportacao.add(menuItemExportarSQL);
         menuArquivo.add(menuItemSanitizacao);
         menuArquivo.add(menuItemDuplicidades);
+        menuArquivo.add(menuItemApagarColuna);
 
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
@@ -208,6 +211,33 @@ public class VisualizadorDados extends JFrame {
                         );
                     }
                 }).start();
+            }
+        });
+
+        menuItemApagarColuna.addActionListener(e -> {
+            if (columnNames.isEmpty()) {
+                JOptionPane.showMessageDialog(this, "Nenhuma coluna carregada.");
+                return;
+            }
+            String colunaSelecionada = (String) JOptionPane.showInputDialog(
+                    this,
+                    "Selecione a coluna a ser apagada:",
+                    "Apagar Coluna",
+                    JOptionPane.PLAIN_MESSAGE,
+                    null,
+                    columnNames.toArray(),
+                    columnNames.get(0)
+            );
+            if (colunaSelecionada != null) {
+                int confirm = JOptionPane.showConfirmDialog(
+                        this,
+                        "Tem certeza que deseja apagar a coluna '" + colunaSelecionada + "'?",
+                        "Confirmação",
+                        JOptionPane.YES_NO_OPTION
+                );
+                if (confirm == JOptionPane.YES_OPTION) {
+                    apagarColuna(colunaSelecionada);
+                }
             }
         });
 
@@ -621,6 +651,23 @@ public class VisualizadorDados extends JFrame {
             stmt.executeBatch();
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this, "Erro ao atualizar banco: " + e.getMessage());
+        }
+    }
+
+    private void apagarColuna(String coluna) {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+
+            String sql = "ALTER TABLE csv_data DROP COLUMN \"" + coluna + "\";";
+            PreparedStatement stmt = conn.prepareStatement(sql);
+            stmt.executeUpdate();
+
+            columnNames.clear();
+            loadColumnNames();
+            loadData();
+            JOptionPane.showMessageDialog(this, "Coluna '" + coluna + "' apagada com sucesso.");
+        } catch (SQLException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Erro ao apagar coluna: " + e.getMessage());
         }
     }
 

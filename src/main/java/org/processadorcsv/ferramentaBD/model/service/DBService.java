@@ -147,6 +147,12 @@ public class DBService implements IDBService {
         }
         inserirRegistro(tabela, dados);
     }
+
+    @Override
+    public void inserirRegistroSeCamposCorrespondentes(String tabelaDestino, Map<String, Object> dadosConvertidos) throws SQLException {
+
+    }
+
     public Connection getConnection() {
         return this.connection;
     }

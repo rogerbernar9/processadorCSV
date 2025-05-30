@@ -12,6 +12,7 @@ import java.util.Set;
 
 import org.processadorcsv.ferramentaBD.model.service.DBService;
 import org.processadorcsv.ferramentaBD.model.service.IDBService;
+import org.processadorcsv.ferramentaBD.model.service.dialog.ImportarDoInternoDialog;
 import org.processadorcsv.viewmodel.ExportarCSVDialog;
 import org.processadorcsv.viewmodel.util.CSVImporterThread;
 
@@ -37,6 +38,7 @@ public class MainWindow extends JFrame {
 
     private JMenuItem menuItemExportar;
     private JMenuItem menuItemImportar;
+    private JMenuItem menuItemImportarInterno;
 
 
     public MainWindow(IDBService service) {
@@ -59,6 +61,8 @@ public class MainWindow extends JFrame {
         JMenu menuExportar = new JMenu("Exportação");
         menuItemExportar = new JMenuItem("Exportar para CSV");
         menuItemImportar = new JMenuItem("Importar CSV");
+        menuItemImportarInterno = new JMenuItem("Importar do banco interno SQLite");
+
         JMenu menuImportar = new JMenu("Importação");
 
         setJMenuBar(menuBar);
@@ -66,6 +70,7 @@ public class MainWindow extends JFrame {
         menuBar.add(menuImportar);
         menuExportar.add(menuItemExportar);
         menuImportar.add(menuItemImportar);
+        menuImportar.add(menuItemImportarInterno);
 
         JPanel bottomPanel = new JPanel();
         bottomPanel.add(btnAnterior);
@@ -101,6 +106,10 @@ public class MainWindow extends JFrame {
 
         menuItemImportar.addActionListener( e -> {
             importarCSV();
+        });
+
+        menuItemImportarInterno.addActionListener(e -> {
+            new ImportarDoInternoDialog(this, dbService, (String) tabelaCombo.getSelectedItem());
         });
 
         carregarTabelas();
