@@ -3,6 +3,7 @@ package org.processadorcsv.viewmodel;
 import org.mozilla.universalchardet.UniversalDetector;
 import org.processadorcsv.ferramentaBD.view.LoginView;
 import org.processadorcsv.jdbd.db.DatabaseUtil;
+import org.processadorcsv.viewmodel.util.PerformanceTuner;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -26,7 +27,7 @@ public class CsvReader extends JFrame {
     BlockingQueue<List<String>> csvQueue = new ArrayBlockingQueue<>(50);
     private final AtomicInteger totalRows = new AtomicInteger(0);
     private final AtomicInteger insertedRows = new AtomicInteger(0);
-    private final int batchSize = 500;
+    private int batchSize = 500;
     private final AtomicBoolean leituraFinalizada = new AtomicBoolean(false);
     private File currentFile;
     private String[] headers;
@@ -168,11 +169,20 @@ public class CsvReader extends JFrame {
 
         boolean hasHeader = headerYes.isSelected();
         leituraFinalizada.set(false);
+
         String chartSetName = this.detectCharset(csvFile);
         System.out.println(chartSetName);
 
+        int optimalBatchSize = PerformanceTuner.calculaBatchSizeOtimizado();
+        int optimalThreads = PerformanceTuner.calculaThreadsOtimizada();
+        this.batchSize = optimalBatchSize; // atualiza o batchSize
+
+        System.out.println("Usando batchSize: " + optimalBatchSize + ", Threads: " + optimalThreads);
+
         executor.execute(() -> {
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(csvFile), Charset.forName(chartSetName)))) {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(
+                    new FileInputStream(csvFile), Charset.forName(chartSetName)))) {
+
                 String line = br.readLine();
                 if (!hasHeader && line != null) {
                     csvQueue.put(List.of(line));
@@ -193,6 +203,7 @@ public class CsvReader extends JFrame {
                 if (!chunk.isEmpty()) {
                     csvQueue.put(chunk);
                 }
+
             } catch (Exception e) {
                 e.printStackTrace();
             } finally {
@@ -204,14 +215,15 @@ public class CsvReader extends JFrame {
                 });
             }
         });
-        int consumidores = 2;
 
-        for (int j = 0; j < consumidores; j++) {
+        // 🔁 Inicia os consumidores com base nos núcleos disponíveis
+        for (int j = 0; j < optimalThreads; j++) {
             executor.execute(() -> {
-
-                try (Connection conn = DriverManager.getConnection("jdbc:sqlite:"+ DatabaseUtil.getPath());
+                try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
                      PreparedStatement pstmt = conn.prepareStatement(insertSql)) {
+
                     conn.setAutoCommit(false);
+
                     while (!leituraFinalizada.get() || !csvQueue.isEmpty()) {
                         List<String> chunk = csvQueue.poll(1, TimeUnit.SECONDS);
                         if (chunk == null || chunk.isEmpty()) continue;
@@ -229,10 +241,9 @@ public class CsvReader extends JFrame {
                         conn.commit();
                         insertedRows.addAndGet(chunk.size());
 
-                        // adiciona linhas inseridas na tela inicial
-                        SwingUtilities.invokeLater(() -> {
-                            statusLabel.setText("Linhas inseridas: " + insertedRows.get());
-                        });
+                        SwingUtilities.invokeLater(() ->
+                                statusLabel.setText("Linhas inseridas: " + insertedRows.get())
+                        );
                     }
 
                 } catch (Exception e) {
@@ -240,7 +251,6 @@ public class CsvReader extends JFrame {
                 }
             });
         }
-
     }
 
     private String[] parseCsvLine(String line) {
