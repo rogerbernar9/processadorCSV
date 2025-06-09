@@ -4,6 +4,7 @@ import org.mozilla.universalchardet.UniversalDetector;
 import org.processadorcsv.ferramentaBD.view.LoginView;
 import org.processadorcsv.jdbd.db.DatabaseUtil;
 import org.processadorcsv.viewmodel.util.PerformanceTuner;
+import org.processadorcsv.viewmodel.util.Preferencias;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -40,6 +41,8 @@ public class CsvReader extends JFrame {
     private JMenuItem menuItemVisualizarDados;
     private JMenuItem menuItemConectarBancoDados;
     private JMenuItem menuItemApagarSQLite;
+    private JMenuItem menuItemPreferencias;
+
 
 
     public CsvReader() {
@@ -61,12 +64,14 @@ public class CsvReader extends JFrame {
         JMenuBar menuBar = new JMenuBar();
         // cria um menu
         JMenu menuArquivo = new JMenu("Opções");
+        JMenu menuPreferencias = new JMenu("Preferências");
         JMenu menuBD = new JMenu("Banco de Dados");
         menuItemCarregarCSV = new JMenuItem("Carregar CSV");
         menuItemVisualizarDados = new JMenuItem("Visualizar Dados");
 
         menuItemConectarBancoDados = new JMenuItem("Conectar em um Banco de dados Externo");
         menuItemApagarSQLite = new JMenuItem("Descartar banco local");
+        menuItemPreferencias = new JMenuItem("Otimização");
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
 
@@ -79,9 +84,11 @@ public class CsvReader extends JFrame {
         menuArquivo.add(menuItemVisualizarDados);
         menuArquivo.add(menuItemApagarSQLite);
         menuBD.add(menuItemConectarBancoDados);
+        menuPreferencias.add(menuItemPreferencias);
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
         menuBar.add(menuBD);
+        menuBar.add(menuPreferencias);
 
         menuItemCarregarCSV.addActionListener(e -> loadCsv());
 
@@ -103,6 +110,11 @@ public class CsvReader extends JFrame {
             deleteSqliteDatabase();
         });
 
+        menuItemPreferencias.addActionListener(e -> {
+            PreferenciasView preferenciasView = new PreferenciasView(this);
+            preferenciasView.setVisible(true);
+        });
+
         JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         statusPanel.add(statusLabel);
         contentPanel.add(statusPanel, BorderLayout.SOUTH);
@@ -116,6 +128,7 @@ public class CsvReader extends JFrame {
             currentFile = fileChooser.getSelectedFile();
             createSqliteDatabase(currentFile);
             loadDataIntoSqlite(currentFile);
+
         }
     }
 
@@ -208,6 +221,39 @@ public class CsvReader extends JFrame {
                 e.printStackTrace();
             } finally {
                 leituraFinalizada.set(true);
+
+                if (Preferencias.isOtimizarCarregamento()) {
+
+                    executor.execute(() -> {
+                        while (insertedRows.get() < totalRows.get()) {
+                            try {
+                                Thread.sleep(500);
+                            } catch (InterruptedException ignored) {
+                            }
+                        }
+
+                        System.out.println(insertedRows.get());
+                        if (insertedRows.get() >= 100_000) {
+                            SwingUtilities.invokeLater(() -> {
+                                CarregadorIndices.show("Otimizando banco de dados...");
+                            });
+
+                            executor.execute(() -> {
+                                verificarOuCriarIndices();
+
+                                SwingUtilities.invokeLater(() -> {
+                                    CarregadorIndices.hide();
+                                    menuItemCarregarCSV.setEnabled(true);
+                                    menuItemVisualizarDados.setEnabled(true);
+                                    menuItemApagarSQLite.setEnabled(true);
+                                    JOptionPane.showMessageDialog(null, "Índices criados com sucesso para otimizar a busca.");
+                                });
+                            });
+                        }
+                    });
+                }
+
+
                 SwingUtilities.invokeLater(() -> {
                     menuItemCarregarCSV.setEnabled(true);
                     menuItemVisualizarDados.setEnabled(true);
@@ -216,7 +262,6 @@ public class CsvReader extends JFrame {
             }
         });
 
-        // 🔁 Inicia os consumidores com base nos núcleos disponíveis
         for (int j = 0; j < optimalThreads; j++) {
             executor.execute(() -> {
                 try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath());
@@ -339,6 +384,47 @@ public class CsvReader extends JFrame {
             csvReader.setVisible(true);
         });
     }
+
+    private void verificarOuCriarIndices() {
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + DatabaseUtil.getPath())) {
+            Statement stmt = conn.createStatement();
+
+            List<String> colunas = new ArrayList<>();
+            ResultSet rs = stmt.executeQuery("PRAGMA table_info(csv_data)");
+            while (rs.next()) {
+                String nomeColuna = rs.getString("name");
+                if (!nomeColuna.equalsIgnoreCase("id")) {
+                    colunas.add(nomeColuna);
+                }
+            }
+            rs.close();
+
+            Set<String> indicesExistentes = new HashSet<>();
+            rs = stmt.executeQuery("PRAGMA index_list(csv_data)");
+            while (rs.next()) {
+                String nomeIndice = rs.getString("name");
+                indicesExistentes.add(nomeIndice);
+            }
+            rs.close();
+
+            for (String indice : indicesExistentes) {
+                if (indice.startsWith("idx_")) {
+                    stmt.execute("DROP INDEX IF EXISTS " + indice);
+                }
+            }
+
+            for (String coluna : colunas) {
+                String nomeIndice = "idx_" + coluna;
+                System.out.println("Criando índice para coluna: "+coluna);
+                String sql = "CREATE INDEX IF NOT EXISTS " + nomeIndice + " ON csv_data(\"" + coluna + "\")";
+                stmt.execute(sql);
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+
 
 
 
