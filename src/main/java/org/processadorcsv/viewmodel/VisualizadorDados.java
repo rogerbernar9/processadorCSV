@@ -5,14 +5,13 @@ import org.processadorcsv.viewmodel.util.CSVExporterWorker;
 import org.processadorcsv.viewmodel.util.CarregadorDadosVazios;
 
 import javax.swing.*;
+import javax.swing.plaf.nimbus.State;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.io.File;
 import java.io.FileWriter;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.Vector;
+import java.util.*;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
