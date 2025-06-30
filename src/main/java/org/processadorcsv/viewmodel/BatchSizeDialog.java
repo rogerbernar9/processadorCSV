@@ -20,11 +20,11 @@ public class BatchSizeDialog extends JDialog {
         okButton.addActionListener(e -> {
             try {
                 int value = Integer.parseInt(inputField.getText());
-                if (value > 0) {
+                if (value > 0 && value <= 200000) {
                     batchSize = value;
                     dispose();
                 } else {
-                    JOptionPane.showMessageDialog(this, "Valor deve ser maior que 0.");
+                    JOptionPane.showMessageDialog(this, "Valor deve ser maior que 0 e menor que 200000.");
                 }
             } catch (NumberFormatException ex) {
                 JOptionPane.showMessageDialog(this, "Insira um número válido.");
