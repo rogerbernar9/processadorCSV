@@ -28,7 +28,7 @@ public class CsvReader extends JFrame {
     BlockingQueue<List<String>> csvQueue = new ArrayBlockingQueue<>(50);
     private final AtomicInteger totalRows = new AtomicInteger(0);
     private final AtomicInteger insertedRows = new AtomicInteger(0);
-    private int batchSize = 500;
+    private int batchSize = -1;
     private final AtomicBoolean leituraFinalizada = new AtomicBoolean(false);
     private File currentFile;
     private String[] headers;
@@ -42,6 +42,7 @@ public class CsvReader extends JFrame {
     private JMenuItem menuItemConectarBancoDados;
     private JMenuItem menuItemApagarSQLite;
     private JMenuItem menuItemPreferencias;
+    private JMenuItem menuItemBatchSize;
 
 
 
@@ -72,6 +73,7 @@ public class CsvReader extends JFrame {
         menuItemConectarBancoDados = new JMenuItem("Conectar em um Banco de dados Externo");
         menuItemApagarSQLite = new JMenuItem("Descartar banco local");
         menuItemPreferencias = new JMenuItem("Otimização");
+        menuItemBatchSize = new JMenuItem("Batch size");
         menuArquivo.add(menuItemCarregarCSV);
         menuArquivo.add(menuItemVisualizarDados);
 
@@ -85,10 +87,21 @@ public class CsvReader extends JFrame {
         menuArquivo.add(menuItemApagarSQLite);
         menuBD.add(menuItemConectarBancoDados);
         menuPreferencias.add(menuItemPreferencias);
+        menuPreferencias.add(menuItemBatchSize);
         // Adiciona o menu à barra de menu
         menuBar.add(menuArquivo);
         menuBar.add(menuBD);
         menuBar.add(menuPreferencias);
+
+        menuItemBatchSize.addActionListener(e -> {
+            BatchSizeDialog dialog = new BatchSizeDialog(this);
+            dialog.setVisible(true);
+            int userDefinedBatchSize = dialog.getBatchSize();
+
+            if (userDefinedBatchSize > 0) {
+                this.batchSize = userDefinedBatchSize;
+            }
+        });
 
         menuItemCarregarCSV.addActionListener(e -> loadCsv());
 
@@ -188,9 +201,11 @@ public class CsvReader extends JFrame {
 
         int optimalBatchSize = PerformanceTuner.calculaBatchSizeOtimizado();
         int optimalThreads = PerformanceTuner.calculaThreadsOtimizada();
-        this.batchSize = optimalBatchSize; // atualiza o batchSize
+        if (this.batchSize <= 0) {
+            this.batchSize = PerformanceTuner.calculaBatchSizeOtimizado();
+        }
 
-        System.out.println("Usando batchSize: " + optimalBatchSize + ", Threads: " + optimalThreads);
+        System.out.println("Usando batchSize: " + this.batchSize + ", Threads: " + optimalThreads);
 
         executor.execute(() -> {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(

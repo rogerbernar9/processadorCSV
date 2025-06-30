@@ -19,10 +19,16 @@ public class QueryExecutor extends JDialog {
         JPanel painelTopo = new JPanel(new BorderLayout());
         painelTopo.add(new JScrollPane(areaSQL), BorderLayout.CENTER);
         JButton btnExecutar = new JButton("Executar");
+        JButton btnVerificar = new JButton("Verificar Sintaxe");
+
         painelTopo.add(btnExecutar, BorderLayout.EAST);
+        painelTopo.add(btnVerificar, BorderLayout.WEST);
+
         add(painelTopo, BorderLayout.NORTH);
         add(new JScrollPane(tabelaResultados), BorderLayout.CENTER);
         btnExecutar.addActionListener(e -> executarSQL());
+        btnVerificar.addActionListener(e -> verificarSintaxe());
+
         setSize(700, 400);
         setLocationRelativeTo(parent);
         setVisible(true);
@@ -54,6 +60,21 @@ public class QueryExecutor extends JDialog {
             }
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Erro ao executar SQL: " + ex.getMessage());
+        }
+    }
+
+    private void verificarSintaxe() {
+        String sql = areaSQL.getText().trim();
+        System.out.println(sql);
+        if (sql.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Digite uma query para verificar.");
+            return;
+        }
+        try {
+            dbService.getConnection().prepareStatement(sql).close();
+            JOptionPane.showMessageDialog(this, "Sintaxe SQL válida!");
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Erro de sintaxe SQL: " + ex.getMessage());
         }
     }
 

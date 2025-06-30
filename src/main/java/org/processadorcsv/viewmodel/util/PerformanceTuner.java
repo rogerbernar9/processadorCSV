@@ -21,9 +21,9 @@ public class PerformanceTuner {
         } else if (memoryMB < 2048) {
             return 500;
         } else if (memoryMB < 4096) {
-            return 1000;
+            return 4800;
         } else {
-            return 2000;
+            return 9600;
         }
     }
 
